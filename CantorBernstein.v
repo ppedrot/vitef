@@ -1,6 +1,6 @@
-Require Import Base Cartesian.
+Require Import Base Cartesian Equipotence.
 
-Section CantorBernstein.
+Section Tarski.
 
 Variable E : V.
 Variable F : V.
@@ -66,4 +66,54 @@ apply extensionality.
   now intuition.
 Qed.
 
+End Tarski.
+
+Section CantorBernstein.
+
+Variable A B : V.
+Variable f g : V.
+
+Variable f_inj : f ∈ injection A B.
+Variable g_inj : g ∈ injection B A.
+
+Let sub x y := comprehension x (fun z => ~ z ∈ y).
+Let img f x := collection x (app f).
+
+Definition F := reify (powerset A) (fun X => sub A (img g (sub B (img f X)))).
+
+Let sub_spec : forall x y z, z ∈ sub x y <-> (z ∈ x /\ ~ z ∈ y).
+Proof.
+intros x y z; split; intros H.
++ apply comprehension_spec in H; [|intros x1 x2 Hx; rewrite Hx; reflexivity].
+  assumption.
++ apply comprehension_spec; [intros x1 x2 Hx; rewrite Hx; reflexivity|].
+  assumption.
+Qed.
+
+Let img_spec : forall f x z, z ∈ img f x <-> (exists u, u ∈ x /\ app f u ≅ z).
+Proof.
+Admitted.
+
+Lemma F_growing : forall X Y, X ∈ powerset A -> Y ∈ powerset A -> X ⊆ Y -> app F X ⊆ app F Y.
+Proof.
+intros X Y HX HY Hm; apply included_spec; intros z Hz.
+unfold F in *; rewrite reify_spec; [|admit|assumption].
+rewrite reify_spec in Hz; [|admit|assumption].
+apply sub_spec; apply sub_spec in Hz; destruct Hz as [He Hz]; split; [intuition|intros Hc].
+apply Hz; clear Hz.
+apply img_spec; apply img_spec in Hc; destruct Hc as [u [Hul Hur]].
+exists u; split; [|assumption].
+apply sub_spec; apply sub_spec in Hul; split; [now intuition|].
+destruct Hul as [Hu Hz]; intros Hc; apply Hz; clear Hz.
+apply img_spec; apply img_spec in Hc; destruct Hc as [v Hv].
+exists v; split; [|intuition].
+eapply mem_included_compat; [|eassumption]; intuition.
+Qed.
+
+Lemma F_defined : F ∈ function (powerset A) (powerset A).
+Proof.
+eapply codomain_included_compat; [apply reify_defined|].
+Admitted.
+
 End CantorBernstein.
+

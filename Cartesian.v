@@ -99,7 +99,7 @@ Qed.
 
 Record function_def (x y : V) (f : V) := {
   function_def_def : forall u, u ∈ x -> exists v, v ∈ y /\ tuple u v ∈ f;
-  function_def_fun : forall u v1 v2, u ∈ x -> tuple u v1 ∈ f -> tuple u v2 ∈ f -> v1 ≅ v2
+  function_def_fun : forall u v1 v2, tuple u v1 ∈ f -> tuple u v2 ∈ f -> v1 ≅ v2
 }.
 
 Instance Proper_function_def : Proper (V_eq ==> V_eq ==> V_eq ==> iff) function_def.
@@ -110,7 +110,7 @@ first [symmetry; assumption|clear].
 intros x1 x2 Hx y1 y2 Hy z1 z2 Hz [Hl Hr]; split.
 + intros u Hu; rewrite <- Hx in Hu; destruct (Hl u Hu) as [v Hv].
   exists v; rewrite <- Hy, <- Hz; tauto.
-+ intros u v1 v2 Hu Hv1 Hv2; apply (Hr u); rewrite ?Hx, ?Hy, ?Hz; assumption.
++ intros u v1 v2 Hv1 Hv2; apply (Hr u); rewrite ?Hx, ?Hy, ?Hz; assumption.
 Qed.
 
 (* Various utility functions *)
@@ -197,9 +197,6 @@ apply function_spec in Hf; destruct Hf as [Hd Hf]; split; intros H.
     apply comprehension_spec in Hz; [|intros x1 x2 Hx; rewrite Hx; reflexivity].
     destruct Hz as [He Hz].
     destruct Hf as [_ Hf]; apply (Hf u); try assumption.
-    apply (mem_included_compat _ _ _ Hz) in Hd; apply product_spec in Hd.
-    clear - Hd Hz; destruct Hd as [a [b [Ha [Hb Heq]]]].
-    apply tuple_inj_l in Heq; rewrite Heq; assumption.
   - apply union_spec; exists v; split; [assumption|].
     apply comprehension_spec; [intros x1 x2 Hx; rewrite Hx; reflexivity|].
     split; [|assumption].
@@ -239,7 +236,7 @@ apply extensionality; apply included_spec; intros r Hr.
 + apply union_spec in Hr; destruct Hr as [s [Hsl Hsr]].
   apply comprehension_spec in Hsr.
   - destruct Hsr as [Hsu Hzs].
-    assert (Hrw := Hfun _ _ _ Hz Himg Hzs); rewrite Hrw; assumption.
+    assert (Hrw := Hfun _ _ _ Himg Hzs); rewrite Hrw; assumption.
   - clear; intros ? ? H; rewrite H; tauto.
 + apply union_spec; exists v; split; [assumption|].
   apply comprehension_spec; [|split].
@@ -347,7 +344,7 @@ split; [|split].
     exists u; split; [assumption|reflexivity].
   - apply collection_spec; [assumption|].
     exists u; split; [assumption|reflexivity].
-+ intros u v1 v2 Hu Hv1 Hv2.
++ intros u v1 v2 Hv1 Hv2.
   apply collection_spec in Hv1; [|assumption]; destruct Hv1 as [x1 [Hx1 Hf1]].
   apply collection_spec in Hv2; [|assumption]; destruct Hv2 as [x2 [Hx2 Hf2]].
   assert (Hrw := tuple_inj_l _ _ _ _ Hf1); rewrite <- Hrw in *; clear x1 Hrw.
@@ -355,6 +352,25 @@ split; [|split].
   assert (Hrw := tuple_inj_r _ _ _ _ Hf1); rewrite Hrw in *; clear v1 Hrw.
   assert (Hrw := tuple_inj_r _ _ _ _ Hf2); rewrite Hrw in *; clear v2 Hrw.
   reflexivity.
+Qed.
+
+Lemma codomain_included_compat : forall x y z f,
+  f ∈ function x y -> y ⊆ z -> f ∈ function x z.
+Proof.
+intros x y z f Hf Hs.
+apply function_spec in Hf; destruct Hf as [Hfl Hfr].
+apply function_spec; split.
++ apply included_spec; intros p Hp; apply product_spec.
+  assert (Hm : p ∈ product x y).
+  { eapply mem_included_compat; eassumption. }
+  apply product_spec in Hm; destruct Hm as [u [v [Hu [Hv Heq]]]].
+  exists u, v; split; [assumption|]; split; [|assumption].
+  eapply mem_included_compat; eassumption.
++ destruct Hfr as [Hfd Hfi]; split.
+  - intros u Hu; destruct (Hfd u Hu) as [v [Hv Hf]].
+    exists v; split; [|assumption].
+    eapply mem_included_compat; eassumption.
+  - intros u v1 v2 Hv1 Hv2; eapply Hfi; eassumption.
 Qed.
 
 Definition composition (f g : V) : V := reify (domain g) (fun x => app f (app g x)).
