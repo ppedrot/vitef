@@ -94,6 +94,11 @@ Let img_spec : forall f x z, z ∈ img f x <-> (exists u, u ∈ x /\ app f u ≅
 Proof.
 Admitted.
 
+(* Lemma F_spec : forall X x, X ∈ powerset A ->
+  (x ∈ app F X) <->
+    (x ∈ A /\
+    (forall y, y ∈ B -> (forall z, z ∈ X -> ~ tuple z y ∈ f) -> ~ tuple y x ∈ g)). *)
+
 Lemma F_growing : forall X Y, X ∈ powerset A -> Y ∈ powerset A -> X ⊆ Y -> app F X ⊆ app F Y.
 Proof.
 intros X Y HX HY Hm; apply included_spec; intros z Hz.
@@ -114,6 +119,18 @@ Lemma F_defined : F ∈ function (powerset A) (powerset A).
 Proof.
 eapply codomain_included_compat; [apply reify_defined|].
 Admitted.
+
+Definition M := Φ A F.
+
+Lemma M_fixpoint : app F M ≅ M.
+Proof.
+apply Φ_fixpoint.
++ apply F_defined.
++ apply F_growing.
+Qed.
+
+(* Definition h := collection A (fun x => tuple x )
+  cup (collection M (app f)) (collection (sub A M) (app (inverse g))). *)
 
 End CantorBernstein.
 

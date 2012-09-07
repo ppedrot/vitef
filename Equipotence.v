@@ -19,6 +19,20 @@ Record bijection_def (x y : V) (f : V) := {
 Definition injection x y := comprehension (powerset (product x y)) (injection_def x y).
 Definition bijection x y := comprehension (powerset (product x y)) (bijection_def x y).
 
+Lemma inverse_spec : forall x y f, tuple x y ∈ f <-> tuple y x ∈ inverse f.
+Proof.
+intros x y f.
+assert (HP : Proper (V_eq ==> iff) (fun p => exists u, exists v, p ≅ tuple v u /\ tuple u v ∈ f)).
+{ apply proper_sym_impl_iff; [apply V_eq_sym|]; intros x1 x2 Hx [u [v H]].
+  exists u, v; rewrite <- Hx; assumption. }
+split; intros H.
++ apply comprehension_spec; [assumption|].
+  split; [|exists x, y; split; [reflexivity|assumption]].
+  apply product_spec; exists y, x; split; [|split; [|reflexivity]].
+  - apply comprehension_spec.
+    admit.
+Admitted.
+
 Lemma injection_function : forall x y f, injection_def x y f -> function_def x y f.
 Proof.
 intros x y f [? ?]; assumption.

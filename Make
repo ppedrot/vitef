@@ -4,3 +4,13 @@ Cartesian.v
 Equipotence.v
 Ordinal.v
 CantorBernstein.v
+
+PTS/PTS_base.v
+PTS/PTS_term.v
+PTS/PTS_red.v
+PTS/PTS_env.v
+PTS/PTS_type.v
+PTS/PTS_sr.v
+PTS/PTS_type_eq.v
+
+CC_model.v

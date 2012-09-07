@@ -57,6 +57,26 @@ intros x [Hxl Hxr]; split.
     rewrite Hy; apply Hxl; rewrite <- Hy; assumption.
 Qed.
 
+(* Lemma ordinal_powerset : forall x, ordinal x -> ordinal (powerset x).
+Proof.
+intros x [Hxl Hxr]; split.
++ intros y Hy; apply included_spec; intros z Hz; apply powerset_spec.
+  apply included_spec; intros u Hu; apply powerset_spec in Hy.
+  assert (Hm : z ∈ x).
+  { eapply mem_included_compat; eassumption. }
+  apply Hxl in Hm; eapply mem_included_compat; eassumption.
++ intros y Hy z Hz; apply powerset_spec in Hy.
+  assert (Hm : z ∈ x).
+  { eapply mem_included_compat; eassumption. }
+  assert (Hzl := Hxl _ Hm); assert (Hzr := Hxr _ Hm).
+  apply included_spec; intros u Hu.
+  apply Hzl in Hu.
+
+  
+
+Qed.*)
+
+
 Lemma wf_irrefl : forall A R (x : A), well_founded R -> ~ R x x.
 Proof.
 intros A R x H; specialize (H x); induction H as [x H IH]; intros Hc.
@@ -99,12 +119,21 @@ intros m; induction m as [|m]; intros n Heq; simpl in *.
   - f_equal; apply IHm; apply successor_inj; assumption.
 Qed.
 
-(* Lemma ordinal_well_ordered : forall x y,
-  ordinal x -> ordinal y -> ~ (~ x ∈ y /\ ~ y ∈ x /\ ~ x ≅ y).
+Definition omega : V := @V_const nat ordinal_of_nat.
+
+Lemma omega_spec : forall x, x ∈ omega <-> (exists n, x ≅ ordinal_of_nat n).
 Proof.
-intros x y Hx Hy [Hl [Hr Heq]].
-assert (Hl' : forall z, z ≅ x -> z ε y -> False).
-{ intros z Hz Hm; apply Hl; exists z; assumption. } *)
+intros x; split; intros H.
++ destruct H as [e Heq He].
+  cut (exists n, e ≅ ordinal_of_nat n).
+  - intros [n Hn]; exists n; rewrite <- Heq; assumption.
+  - clear x Heq; pattern e.
+    let P := match goal with [|- ?P e] => P end in
+    revert He; eapply (@V_rel_inv _ _ P).
+    intros n; exists n; reflexivity.
++ destruct H as [n Hn].
+  exists (ordinal_of_nat n); [symmetry; assumption|constructor].
+Qed.
 
 Lemma ordinal_rect : forall P,
   (forall x, ordinal x -> (forall y, y ∈ x -> P y) -> P x) -> forall x, ordinal x -> P x.
