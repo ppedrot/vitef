@@ -4,17 +4,17 @@
  (** The main difference between PTS and PTSe is that we do
  not rely here on bare beta-conversion, but we also check that
  every step of the conversion is welltyped.*)
-Require Import base.
-Require Import ut_term.
-Require Import ut_red.
-Require Import ut_env.
+Require Import PTS_base.
+Require Import PTS_term.
+Require Import PTS_red.
+Require Import PTS_env.
 Require Import List.
 Require Import Peano_dec.
 Require Import Compare_dec.
 Require Import Lt Le Gt.
 Require Import Plus Minus.
-Require Import ut_typ.
-Require Import ut_sr.
+Require Import PTS_type.
+Require Import PTS_sr.
 
 Module Type ut_typ_eq_mod (X:term_sig) (Y:pts_sig X) (TM:ut_term_mod X) (EM:ut_env_mod X TM) (RM: ut_red_mod X TM)
  (SRM: ut_sr_mod X Y TM EM RM).

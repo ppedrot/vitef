@@ -1,9 +1,9 @@
 (** * The Subject Reduction Property. *)
-Require Import base.
-Require Import ut_term.
-Require Import ut_red.
-Require Import ut_env.
-Require Import ut_typ.
+Require Import PTS_base.
+Require Import PTS_term.
+Require Import PTS_red.
+Require Import PTS_env.
+Require Import PTS_type.
 Require Import List.
 
 Module Type ut_sr_mod  (X:term_sig) (Y:pts_sig X) (TM:ut_term_mod X) (EM:ut_env_mod X TM) (RM: ut_red_mod X TM).
@@ -257,6 +257,3 @@ apply SubjectRed with M; intuition.
 Qed.
 
 End ut_sr_mod.
-
-
-
