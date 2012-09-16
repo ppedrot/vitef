@@ -65,6 +65,11 @@ cofix IH; intros [X Xf] [Y Yf] [Z Zf] [H1l H1r] [H2l H2r]; split.
   }
 Qed.
 
+Instance Equivalence_V_eq : Equivalence V_eq.
+Proof.
+split; auto with typeclass_instances.
+Qed.
+
 Record mem (x y : V) : Prop := {
   mem_set : V;
   mem_set_eq : mem_set ≅ x;
@@ -372,6 +377,13 @@ intros x1 x2 Hx.
 apply extensionality; apply included_spec; intros z Hz; apply union_spec in Hz;
 destruct Hz as [r [Hz Hr]]; apply union_spec; exists r; split;
 solve [assumption|rewrite <- Hx; assumption|rewrite Hx; assumption].
+Qed.
+
+Instance Proper_cup : Proper (V_eq ==> V_eq ==> V_eq) cup.
+Proof.
+intros x1 x2 Hx y1 y2 Hy.
+apply extensionality; apply included_spec; intros z Hz;
+apply cup_spec; apply cup_spec in Hz; revert Hz; rewrite Hx, Hy; tauto.
 Qed.
 
 Instance Proper_powerset : Proper (V_eq ==> V_eq) powerset.

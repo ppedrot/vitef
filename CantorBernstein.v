@@ -129,8 +129,18 @@ apply Φ_fixpoint.
 + apply F_growing.
 Qed.
 
-(* Definition h := collection A (fun x => tuple x )
-  cup (collection M (app f)) (collection (sub A M) (app (inverse g))). *)
+Let h_def x y := (x ∈ M /\ tuple x y ∈ f) \/ (~ x ∈ M /\ tuple x y ∈ g).
+
+Definition h := collection A
+  (fun x => tuple x (union (comprehension B (h_def x)))).
+
+Lemma function_h : function_def A B h.
+Proof.
+split.
++ intros u Hu; unfold h.
+  exists (union (comprehension B (h_def u))); split.
+  - admit.
+Admitted.
 
 End CantorBernstein.
 

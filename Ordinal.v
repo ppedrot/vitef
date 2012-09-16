@@ -27,17 +27,25 @@ split.
 + intros z Hz; exfalso; eapply empty_spec; eassumption.
 Qed.
 
+Lemma ordinal_max : forall x, (forall y, y ∈ x -> ordinal y) -> ordinal (union x).
+Proof.
+intros x Hx; split.
++ intros z Hz; apply included_spec; intros u Hu.
+  apply union_spec in Hz; destruct Hz as [v [Hv Hz]].
+  assert (Hzo := Hx _ Hz); destruct Hzo as [Hzo _].
+  specialize (Hzo _ Hv).
+  apply union_spec; exists v; split; [|assumption].
+  eapply mem_included_compat; eassumption.
++ intros z Hz u Hu.
+  apply union_spec in Hz; destruct Hz as [w [Hz Hw]].
+  apply Hx in Hw; destruct Hw as [Hwl Hwr].
+  apply Hwr; eassumption.
+Qed.
+
 Lemma ordinal_union : forall x, ordinal x -> ordinal (union x).
 Proof.
-intros x [Hx1 Hx2]; split.
-+ intros y Hy; apply -> union_spec in Hy; destruct Hy as [z [Hzl Hzr]].
-  intros s Hs; apply <- union_spec.
-  specialize (Hx1 _ Hzr); clear Hzr.
-  exists y; split.
-  - apply subrelation_mem_rel; assumption.
-  - destruct Hzl as [t Heq H]; rewrite <- Heq; apply Hx1; assumption.
-+ intros y Hy; apply -> union_spec in Hy; destruct Hy as [z [Hzl Hzr]].
-  apply Hx2; eapply transitive_set_alt; eassumption.
+intros x Hx; apply ordinal_max.
+intros; eapply ordinal_mem_compat; eassumption.
 Qed.
 
 Definition successor (x : V) := cup x (singleton x).
@@ -56,26 +64,6 @@ intros x [Hxl Hxr]; split.
   - apply -> singleton_spec in Hy; intros z Hz.
     rewrite Hy; apply Hxl; rewrite <- Hy; assumption.
 Qed.
-
-(* Lemma ordinal_powerset : forall x, ordinal x -> ordinal (powerset x).
-Proof.
-intros x [Hxl Hxr]; split.
-+ intros y Hy; apply included_spec; intros z Hz; apply powerset_spec.
-  apply included_spec; intros u Hu; apply powerset_spec in Hy.
-  assert (Hm : z ∈ x).
-  { eapply mem_included_compat; eassumption. }
-  apply Hxl in Hm; eapply mem_included_compat; eassumption.
-+ intros y Hy z Hz; apply powerset_spec in Hy.
-  assert (Hm : z ∈ x).
-  { eapply mem_included_compat; eassumption. }
-  assert (Hzl := Hxl _ Hm); assert (Hzr := Hxr _ Hm).
-  apply included_spec; intros u Hu.
-  apply Hzl in Hu.
-
-  
-
-Qed.*)
-
 
 Lemma wf_irrefl : forall A R (x : A), well_founded R -> ~ R x x.
 Proof.

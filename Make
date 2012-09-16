@@ -13,4 +13,5 @@ PTS/PTS_type.v
 PTS/PTS_sr.v
 PTS/PTS_type_eq.v
 
+Coherence.v
 CC_model.v
