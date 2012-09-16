@@ -1,4 +1,4 @@
-Require Import Relations Wellfounded Base.
+Require Import Relations Wellfounded Base BaseProps.
 
 Definition transitive_set (x : V) := forall z, z ∈ x -> z ⊆ x.
 

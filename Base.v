@@ -174,11 +174,6 @@ destruct x as [X Xf].
 exists X; intros x; apply (f (Xf x)).
 Defined.
 
-Definition cup (x y : V) : V :=
-  let (X, Xf) := x in
-  let (Y, Yf) := y in
-  @V_const (X + Y) (fun s => match s with inl x => Xf x | inr y => Yf y end).
-
 Definition union (x : V) : V.
 Proof.
 destruct x as [X Xf].
@@ -265,23 +260,6 @@ intros x y; split.
       }
     - change z with ((fun P => @V_const {y : Y | P y} (fun y => Yf (proj1_sig y))) (fun y => Yf y ∈ x)).
       now constructor.
-Qed.
-
-Lemma cup_spec : forall x y z, z ∈ cup x y <-> z ∈ x \/ z ∈ y.
-Proof.
-intros x y z; destruct x as [X Xf]; destruct y as [Y Yf]; split.
-  + intros [s Heq H]; rewrite <- Heq; clear Heq.
-    inversion H using V_rel_inv.
-    intros [x|y]; [left|right]; apply subrelation_mem_rel; constructor.
-  + intros [[s Heq H]|[s Heq H]].
-    - exists s; [assumption|].
-      inversion H using V_rel_inv; clear; intros s.
-      unfold cup; match goal with [ |- _ ε V_const ?f ] => set (F := f) end.
-      change (Xf s) with (F (inl s)); constructor.
-    - exists s; [assumption|].
-      inversion H using V_rel_inv; clear; intros s.
-      unfold cup; match goal with [ |- _ ε V_const ?f ] => set (F := f) end.
-      change (Yf s) with (F (inr s)); constructor.
 Qed.
 
 Lemma union_spec : forall x y, x ∈ union y <-> exists z, x ∈ z /\ z ∈ y.
@@ -377,13 +355,6 @@ intros x1 x2 Hx.
 apply extensionality; apply included_spec; intros z Hz; apply union_spec in Hz;
 destruct Hz as [r [Hz Hr]]; apply union_spec; exists r; split;
 solve [assumption|rewrite <- Hx; assumption|rewrite Hx; assumption].
-Qed.
-
-Instance Proper_cup : Proper (V_eq ==> V_eq ==> V_eq) cup.
-Proof.
-intros x1 x2 Hx y1 y2 Hy.
-apply extensionality; apply included_spec; intros z Hz;
-apply cup_spec; apply cup_spec in Hz; revert Hz; rewrite Hx, Hy; tauto.
 Qed.
 
 Instance Proper_powerset : Proper (V_eq ==> V_eq) powerset.

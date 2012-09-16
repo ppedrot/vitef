@@ -1,8 +1,10 @@
-Require Import Morphisms Base Cartesian Equipotence.
+Require Import Morphisms Base BaseProps Cartesian Equipotence.
 
-Require Import Ordinal.
-
-Definition U0 := union (compre
+Record universe (U : V) : Prop := {
+  universe_empty : empty ∈ U;
+  universe_union : forall x, x ∈ U -> union x ∈ U;
+  universe_powerset : forall x, x ∈ U -> powerset x ∈ U
+}.
 
 Record small U x : Prop := {
   small_wtn : V;
@@ -10,6 +12,14 @@ Record small U x : Prop := {
   small_mem : small_wtn ∈ U;
   small_inj : injection_def x small_wtn small_fun
 }.
+
+Instance Proper_small : Proper (V_eq ==> V_eq ==> iff) small.
+Proof.
+apply proper_sym_impl_iff_2; try apply V_eq_sym.
+intros x1 x2 Hx y1 y2 Hy [u f Hu Hf]; exists u f.
++ rewrite <- Hx; assumption.
++ rewrite <- Hy; assumption.
+Qed.
 
 (* Lemma toto : forall x, small omega x ->
   (forall y, y ∈ x -> small omega y) -> small omega (union x).
@@ -50,25 +60,6 @@ revert x n f Hn Hf Hm; induction N; intros x n f Hn Hf Hm.
 + simpl ordinal_of_nat in Hn; unfold successor in Hn.
   assert (Hrw : exists y z, x ≅ cup (singleton y) z). *)
 
-
-
-Definition cap x y := comprehension x (fun z => z ∈ y).
-
-Instance Proper_cap : Proper (V_eq ==> V_eq ==> V_eq) cap.
-Proof.
-intros x1 x2 Hx y1 y2 Hy; unfold cap; f_equiv; [assumption|].
-intros z1 z2 Hz; rewrite Hy, Hz; reflexivity.
-Qed.
-
-Lemma cap_spec : forall x y z, z ∈ cap x y <-> (z ∈ x /\ z ∈ y).
-Proof.
-intros x y z; split; intros H.
-+ apply comprehension_spec in H; [|intros x1 x2 Hx; rewrite Hx; reflexivity].
-  assumption.
-+ apply comprehension_spec; [|assumption].
-  intros x1 x2 Hx; rewrite Hx; reflexivity.
-Qed.
-
 Definition orthogonal x y := forall z1 z2, z1 ∈ cap x y -> z2 ∈ cap x y -> z1 ≅ z2.
 
 Definition web A := union A.
@@ -104,10 +95,15 @@ split.
   - apply empty_spec in Hz; contradiction.
 Qed.
 
-Record Small U x := {
-  Small_elt : V;
-  Small_spc : Small_elt ∈ U;
-  Small_def : forall α, α ∈ x -> exists β, β ∈ Small_elt /\ 
-}.
+Definition bang U A := comprehension (powerset A)
+  (fun s => (union s ∈ A) /\ (forall a, a ∈ s -> small U a)).
 
-Definition bang U A := comprehension (powerset A) (Small u).
+Lemma coherent_bang : forall U A, coherent_def A -> coherent_def (bang U A).
+Proof.
+intros U A [Hl Hr]; split.
++ intros x Hx; apply comprehension_spec.
+  { repeat intro; repeat f_equiv; try assumption. admit. }
+  split; [|split].
+  - apply powerset_spec; apply included_spec; intros z Hz; apply union_spec in Hz.
+    destruct Hz as [u [Hz Hu]].
+  split
