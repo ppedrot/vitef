@@ -18,6 +18,13 @@ intros x y z; split; intro H.
   - exists y; split; [assumption|apply pair_spec; right; reflexivity].
 Qed.
 
+Lemma cup_idem : forall x, cup x x ≅ x.
+Proof.
+intros x; apply extensionality; apply included_spec; intros z Hz.
++ apply cup_spec in Hz; intuition.
++ apply cup_spec; intuition.
+Qed.
+
 Definition cap x y := comprehension x (fun z => z ∈ y).
 
 Instance Proper_cap : Proper (V_eq ==> V_eq ==> V_eq) cap.

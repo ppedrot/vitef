@@ -1,4 +1,4 @@
-Require Import Base Cartesian Equipotence.
+Require Import Morphisms Base Cartesian Equipotence.
 
 Section Tarski.
 
@@ -8,7 +8,70 @@ Variable F_function : F ∈ function (powerset E) (powerset E).
 Variable F_growing : forall p1 p2, p1 ∈ powerset E -> p2 ∈ powerset E -> p1 ⊆ p2 ->
   app F p1 ⊆ app F p2.
 
-Let D := comprehension (powerset E) (fun p => p ⊆ app F p).
+Let D := comprehension (powerset E) (fun p => app F p ⊆ p).
+
+Definition Φ := comprehension E (fun x => forall p, p ∈ D -> x ∈ p).
+
+Let Proper_Φ : Proper (V_eq ==> iff) (fun x => forall p, p ∈ D -> x ∈ p).
+Proof.
+apply proper_sym_impl_iff; [apply V_eq_sym|].
+clear; intros x1 x2 Hx H ?; rewrite <- Hx; apply H.
+Qed.
+
+Lemma Φ_defined : Φ ∈ powerset E.
+Proof.
+apply powerset_spec; apply included_spec; intros x Hx.
+apply comprehension_spec in Hx; intuition.
+Qed.
+
+Lemma D_stable : forall p, p ∈ D -> app F p ∈ D.
+Proof.
+intros p Hp.
+apply comprehension_spec in Hp; [|intros x1 x2 Hx; rewrite Hx; reflexivity].
+destruct Hp as [Hpl Hpr].
+apply comprehension_spec; [intros x1 x2 Hx; rewrite Hx; reflexivity|].
+split; [eapply app_defined; eassumption|].
+apply F_growing; try assumption.
+eapply app_defined; eassumption.
+Qed.
+
+Lemma Φ_inf : forall p, p ∈ D -> Φ ⊆ p.
+Proof.
+intros p Hp; apply included_spec; intros z Hz.
+apply comprehension_spec in Hz; [|assumption].
+destruct Hz as [Hm Hz]; apply Hz; assumption.
+Qed.
+
+Lemma Φ_bounded : Φ ∈ D.
+Proof.
+apply comprehension_spec; [intros x1 x2 Hx; rewrite Hx; reflexivity|].
+split; [apply Φ_defined|].
+apply included_spec; intros z Hz.
+apply comprehension_spec; [assumption|split].
++ apply (mem_included_compat _ (app F Φ)); [assumption|].
+  apply powerset_spec; eapply app_defined; [eassumption|apply Φ_defined].
++ intros p Hp; eapply mem_included_compat; [eassumption|].
+  assert (Hq : p ∈ D) by assumption.
+  apply comprehension_spec in Hp; [|intros x1 x2 Hx; rewrite Hx; reflexivity].
+  transitivity (app F p); [|now intuition].
+  apply F_growing; [apply Φ_defined|intuition|].
+  apply Φ_inf; assumption.
+Qed.
+
+Lemma Φ_fixpoint : app F Φ ≅ Φ.
+Proof.
+apply extensionality.
++ pose (H := Φ_bounded).
+  apply comprehension_spec in H; [|intros x1 x2 Hx; rewrite Hx; reflexivity].
+  now intuition.
++ apply Φ_inf, D_stable, Φ_bounded.
+Qed.
+
+(* Lemma Φ_smallest : forall Ψ, app F Ψ ≅ Ψ -> Φ ⊆ Ψ.
+Proof.
+intros Ψ HΨ; apply Φ_inf. *)
+
+(*Let D := comprehension (powerset E) (fun p => p ⊆ app F p).
 
 Definition Φ := union D.
 
@@ -64,7 +127,7 @@ apply extensionality.
 + pose (H := Φ_bounded).
   apply comprehension_spec in H; [|intros x1 x2 Hx; rewrite Hx; reflexivity].
   now intuition.
-Qed.
+Qed. *)
 
 End Tarski.
 

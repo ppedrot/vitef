@@ -399,6 +399,52 @@ rewrite Hrw at 3; apply reify_defined.
 clear; intros x1 x2 Hx; assumption.
 Qed.
 
+(* Dependent product *)
+
+Definition dsum (A : V) (B : V) : V :=
+  comprehension (product A (union (union (union B))))
+  (fun p => exists x, exists y, x ∈ A /\ y ∈ app B x /\ p ≅ tuple x y).
+
+Definition dprd (A : V) (B : V) : V :=
+  comprehension (powerset (dsum A B))
+  (fun f => function_def A (collection A (app B)) f).
+
+Lemma dsum_spec : forall A B p,
+  p ∈ dsum A B <-> (exists x, exists y, x ∈ A /\ y ∈ app B x /\ p ≅ tuple x y).
+Proof.
+intros A B p.
+assert (HP : Proper (V_eq ==> iff) (fun p0 : V => exists x y : V, x ∈ A /\ y ∈ app B x /\ p0 ≅ tuple x y)).
+{ intros x1 x2 Hx; f_equiv; intros x; f_equiv; intros y.
+  do 2 f_equiv; split; rewrite Hx; trivial. }
+split; intros H.
++ apply comprehension_spec in H; [|assumption].
+  destruct H as [Hp [x [y [Hx [Hy Heq]]]]].
+  exists x, y; intuition.
++ destruct H as [x [y [Hx [Hy Heq]]]].
+  apply comprehension_spec; [assumption|].
+  split; [|exists x, y; split; [|split]; first [assumption|reflexivity]].
+  apply product_spec; exists x, y.
+  split; [assumption|]; split; [|assumption]; clear p Heq.
+  apply union_spec in Hy; destruct Hy as [z [Hy Hz]].
+  apply comprehension_spec in Hz; [|repeat intro; repeat f_equiv; assumption].
+  apply union_spec; exists z; now intuition.
+Qed.
+
+(* Lemma dprd_codomain : forall A B f x, f ∈ dprd A B -> x ∈ A -> app f x ∈ app B x.
+Proof.
+intros A B f x Hf Hx.
+apply comprehension_spec in Hf; [|repeat intro; f_equiv; assumption].
+destruct Hf as [Hfl Hfr]; apply powerset_spec in Hfl.
+destruct Hfr as [Hfr1 Hfr2].
+specialize (Hfr1 _ Hx); destruct Hfr1 as [y [Hy Hf]].
+assert (Hfd := Hfl); eapply mem_included_compat in Hfl; [|eassumption].
+apply dsum_spec in Hfl; destruct Hfl as [u [v [Hu [Hv Heq]]]].
+assert (Hrw := tuple_inj_l _ _ _ _ Heq); rewrite Hrw in *; clear x Hx Hrw.
+assert (Hrw := tuple_inj_r _ _ _ _ Heq); rewrite Hrw in *; clear y Hrw Heq.
+assert (Hrw : v ≅ app f u); [|now rewrite <- Hrw; assumption].
+eapply Hfr2; [eassumption|].
+eapply mem_included_compat. *)
+
 (* Lemma functional_extensionality : forall s t f g,
   f ∈ function s t -> g ∈ function s t ->
   (forall x, app f x ≅ app g x) -> f ≅ g.
