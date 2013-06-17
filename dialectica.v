@@ -14,7 +14,7 @@
 (** Needed for decidable equality on natural numbers but otherwise we could do without
    [Arith]. *)
 
-Require Import Bool Arith Morphisms.
+Require Import Bool Morphisms Setoid.
 
 Definition extensionality := forall A (B : A -> Type) (f g : forall x, B x),
   (forall x : A, f x = g x) -> f = g.
@@ -34,7 +34,7 @@ Set Implicit Arguments.
    The usual interpretation allows quantification over the natural numbers (and possibly
    functionals over the natural numbers), which are of course inhabited. *)
 
-Record Inhabited := inhabit { ty :> Set; member : ty }.
+Record Inhabited := inhabit { ty :> Type; member : ty }.
 
 (** The inhabited natural numbers. *)
 
@@ -88,7 +88,7 @@ Notation "∃ x : t , p" :=  (@ext t (fun x => p)) (at level 80, x at level 99).
    and conjunction. Thomas Streicher pointed out that the change is inessential in the
    sense that we could prove a separate lemma which allows us to pass from counters for [p
    and q] as pairs to counters as elements of a sum (such a lemma relies in decidability
-   of the [dia] relation defined below).
+   of the [rel] relation defined below).
 
    Second, because we allow the structure of a propositional function to depend on the
    argument, we are forced to introduce type dependency into [W p] and [C p] when [p] is a
@@ -103,7 +103,10 @@ Notation "∃ x : t , p" :=  (@ext t (fun x => p)) (at level 80, x at level 99).
    Indeed, we are going to investigate it in a separate file. For now we are just trying
    to faithfully represent the Dialectica interpretation. *)
 
-Fixpoint W (p : prp) :=
+Variable ctx : Type.
+Variable daimon : ctx.
+
+Fixpoint W (p : prp) : Type :=
   (match p with
      | atm p => unit
      | pls p1 p2 => (W p1) + (W p2)
@@ -113,9 +116,9 @@ Fixpoint W (p : prp) :=
      | unv ty p' => (forall x : ty, W (p' x))
    end)%type
 
-with C p : Set :=
+with C p :=
   (match p with
-     | atm p => unit
+     | atm p => ctx
      | pls p1 p2 => (C p1) * (C p2) (* forall b : bool, match b with true => C p1 | false => C p2 end *)
      | tns p1 p2 => (W p1 -> C p2) * (W p2 -> C p1)
      | bng p => W p -> C p
@@ -123,46 +126,46 @@ with C p : Set :=
      | unv ty p' => { x : ty & C (p' x) }
    end)%type.
 
-(** The relation [dia p w c] is what is usually written as [p_D] in the Dialectica
+(** The relation [rel p w c] is what is usually written as [p_D] in the Dialectica
    interpretation, i.e., the matrix of the interpreted formula.
 
-   In terms of games, [dia p w c] tells whether the player move [w] wins against the
+   In terms of games, [rel p w c] tells whether the player move [w] wins against the
    opponent move [c] in the game determined by the proposition [p].
 *)
 
-Definition dia_pls {A B} (R : forall X, W X -> C X -> Prop)
+Definition rel_pls {A B} (R : forall X, W X -> C X -> Prop)
   (w : W (A ⊕ B)) (z : C (A ⊕ B)) :=
 match w with
 | inl u => R A u (fst z)
 | inr v => R B v (snd z)
 end.
 
-Definition dia_tns {A B} (R : forall X, W X -> C X -> Prop)
+Definition rel_tns {A B} (R : forall X, W X -> C X -> Prop)
   (w : W (A ⊗ B)) (z : C (A ⊗ B)) :=
 match w, z with
 | (u, v), (zl, zr) => R A u (zr v) /\ R B v (zl u)
 end.
 
-Definition dia_unv {T A} (R : forall X, W X -> C X -> Prop)
+Definition rel_unv {T A} (R : forall X, W X -> C X -> Prop)
   (w : W (∀ x : T, A x)) (z : C (∀ x : T, A x)) :=
 match z with
 | existT _ t u => R (A t) (w t) u
 end.
 
-Fixpoint dia (A : prp) : W A -> C A -> Prop :=
+Fixpoint rel (A : prp) : W A -> C A -> Prop :=
   match A return W A -> C A -> Prop with
     | atm p => (fun _ _ => Is_true p)
-    | pls A B => dia_pls dia
-    | tns A B => dia_tns dia
-    | bng A => fun u y => dia A u (y u)
-    | opp A => (fun x u => ~ dia A u x)
-    | unv T A => dia_unv dia
+    | pls A B => rel_pls rel
+    | tns A B => rel_tns rel
+    | bng A => fun u y => rel A u (y u)
+    | opp A => (fun x u => ~ rel A u x)
+    | unv T A => rel_unv rel
   end.
 
-(** The [dia] relation is decidable. This fact is used only in the adjunction between
+(** The [rel] relation is decidable. This fact is used only in the adjunction between
    conjunction and implication. *)
 
-Theorem dia_decidable (A : prp) (u : W A) (x : C A) : {dia A u x} + {~ (dia A u x)}.
+Theorem rel_decidable (A : prp) (u : W A) (x : C A) : {rel A u x} + {~ (rel A u x)}.
 Proof.
 intros A u x; induction A; simpl.
 + unfold Is_true.
@@ -178,17 +181,17 @@ Qed.
 
 (** Of course, a decidable proposition is stable for double negation. *)
 
-Lemma dia_not_not (A : prp) (u : W A) (x : C A) : ~ ~ dia A u x -> dia A u x.
+Lemma rel_not_not (A : prp) (u : W A) (x : C A) : ~ ~ rel A u x -> rel A u x.
 Proof.
   intros p w c H.
-  destruct (dia_decidable p w c); tauto.
+  destruct (rel_decidable p w c); tauto.
 Qed.
 
-Lemma dia_arr : forall A B (w : W (A ⊸ B)) (z : C (A ⊸ B)),
-  (dia (A ⊸ B) w z) <-> (dia A (fst z) (snd w (snd z)) -> dia B (fst w (fst z)) (snd z)).
+Lemma rel_arr : forall A B (w : W (A ⊸ B)) (z : C (A ⊸ B)),
+  (rel (A ⊸ B) w z) <-> (rel A (fst z) (snd w (snd z)) -> rel B (fst w (fst z)) (snd z)).
 Proof.
 intros A B [wl wr] [zl zr]; split; intros H; simpl in *.
-+ intros H'; apply dia_not_not; tauto.
++ intros H'; apply rel_not_not; tauto.
 + tauto.
 Qed.
 
@@ -198,6 +201,7 @@ Qed.
 Definition WC_member (A : prp) : W A * C A.
 Proof.
   induction A; unfold W; unfold C; simpl; fold W; fold C; split; try firstorder.
+  apply daimon.
   exact (member T).
 Defined.
  
@@ -205,13 +209,15 @@ Definition W_member (A : prp) := fst (WC_member A).
 Definition C_member (A : prp) := snd (WC_member A).
 
 (** The predicate [valid p] is the Dialectica interpretation of [p]. It says that there is
-   [w] such that [dia p w c] holds for any [c]. In terms of games semantics this means
+   [w] such that [rel p w c] holds for any [c]. In terms of games semantics this means
    that [W] has a winning strategy (which amounts to a winning move [w]). *)
 
 Notation "⊢ A" := (W A) (at level 89).
 Notation "⊣ A" := (C A) (at level 89).
 
-Class Valid {A} (f : ⊢ A) := { valid_spec : forall b : C A, dia A f b }.
+Class Valid {A} (f : ⊢ A) := { valid_spec : forall b : C A, rel A f b }.
+
+CoInductive ValidI {A} (f : ⊢ A) := validI : ValidI f -> ValidI f.
 
 Definition app {A B} (f : ⊢ A ⊸ B) (x : ⊢ A) : ⊢ B.
 Proof.
@@ -221,7 +227,7 @@ Defined.
 Instance Valid_app : forall {A B} (f : ⊢ A ⊸ B) x, Valid f -> Valid x -> Valid (app f x).
 Proof.
 intros A B [w z] u [Hf] [Hx]; split; intros b.
-specialize (Hf (u, b)); rewrite dia_arr in Hf; simpl in Hf.
+specialize (Hf (u, b)); rewrite rel_arr in Hf; simpl in Hf.
 apply Hf, Hx.
 Qed.
 
@@ -246,7 +252,7 @@ Instance Valid_compose : forall {A B C} (f : ⊢ A ⊸ B) (g : ⊢ B ⊸ C),
 Proof.
 intros A B C [fl fr] [gl gr] [Hf] [Hg]; split; intros [u z].
 specialize (Hf (u, gr z)); specialize (Hg (fl u, z)).
-rewrite dia_arr; rewrite dia_arr in Hf, Hg; simpl in *.
+rewrite rel_arr; rewrite rel_arr in Hf, Hg; simpl in *.
 intros H; apply Hg, Hf, H.
 Qed.
 
@@ -284,7 +290,24 @@ Proof.
 intros A B C D [fl fr] [gl gr] [Hf] [Hg]; split.
 intros [[u v] [zl zr]].
 specialize (Hf (u, zr (gl v))); specialize (Hg (v, zl (fl u))).
-rewrite dia_arr in Hf, Hg; simpl in *; tauto.
+rewrite rel_arr in Hf, Hg; simpl in *; tauto.
+Qed.
+
+Definition tns_assoc {A B C} : ⊢ A ⊗ B ⊗ C ⊸ A ⊗ (B ⊗ C).
+Proof.
+intros A B C; split.
++ intros [[u v] w]; simpl; repeat split; assumption.
++ intros [zl zr]; split.
+  - intros [u v]; apply zl; assumption.
+  - intros w; split.
+    { intros u; apply zl; assumption. }
+    { intros v; apply zr; split; assumption. }
+Defined.
+
+Instance Valid_tns_assoc : forall A B C, Valid (@tns_assoc A B C).
+Proof.
+intros A B C; split; intros [[[u v] w] [zl zr]]; simpl.
+destruct (zl u); tauto.
 Qed.
 
 (** *)
@@ -301,7 +324,7 @@ Defined.
 Instance Valid_lam : forall {A B C} (f : ⊢ A ⊗ B ⊸ C), Valid f -> Valid (lam f).
 Proof.
 intros A B C [fl fr] [Hf]; split; intros [u [v z]].
-specialize (Hf (u, v, z)); rewrite dia_arr in Hf; simpl in *.
+specialize (Hf (u, v, z)); rewrite rel_arr in Hf; simpl in *.
 destruct (fr z) as [gl gr]; simpl in Hf; tauto.
 Qed.
 
@@ -351,7 +374,7 @@ Instance Valid_prd : forall {A B C} (f : ⊢ C ⊸ A) (g : ⊢ C ⊸ B),
   Valid f -> Valid g -> Valid (prd f g).
 Proof.
 intros A B C [fl fr] [gl gr] [Hf] [Hg]; split.
-intros [z [x|y]]; rewrite dia_arr.
+intros [z [x|y]]; rewrite rel_arr.
 + specialize (Hf (z, x)); simpl in Hf; tauto.
 + specialize (Hg (z, y)); simpl in Hg; tauto.
 Qed.
@@ -391,7 +414,7 @@ simpl in u, v.
 simpl.
 simpl in *.
   specialize (zl u v); specialize (zr v u).
-  destruct (dia_decidable _ v zl).
+  destruct (rel_decidable _ v zl).
   - left; assumption.
   - right; assumption.
 Defined.
@@ -399,7 +422,7 @@ Defined.
 Instance Valid_wth_tns {A B} : Valid (@wth_tns A B).
 Proof.
 intros A B; split; intros [[u v] [zl zr]].
-simpl; destruct dia_decidable; simpl; tauto.
+simpl; destruct rel_decidable; simpl; tauto.
 Qed.
 
 Definition tns_wth {A B} : ⊢ !A ⊗ !B  ⊸ !(A ＆ B).
@@ -423,7 +446,7 @@ unfold tns_wth, wth_tns, id; simpl; unfold Basics.compose; f_equal.
 + apply Hext; intros [u v]; reflexivity.
 + apply Hext; intros [zl zr]; unfold Datatypes.id; f_equal.
   - apply Hext; intros u; apply Hext; intros v.
-    destruct dia_decidable.*)
+    destruct rel_decidable.*)
 
 Definition bng_fun {A B} (f : ⊢ A ⊸ B) : ⊢ !A ⊸ !B.
 Proof.
@@ -461,7 +484,7 @@ Defined.
 
 Lemma Valid_bng_mon {A B} : Valid (@bng_mon A B).
 Proof.
-intros A B; split; intros [[u v] z]; apply dia_arr; simpl in *.
+intros A B; split; intros [[u v] z]; apply rel_arr; simpl in *.
 destruct (z (u, v)); simpl; tauto.
 Qed.
 
@@ -486,7 +509,7 @@ Defined.
 
 Instance Valid_der {A} : Valid (@der A).
 Proof.
-intros A; split; intros [u x]; apply dia_arr; simpl in *; tauto.
+intros A; split; intros [u x]; apply rel_arr; simpl in *; tauto.
 Qed.
 
 Lemma natural_der : forall A B (f : ⊢ A ⊸ B),
@@ -547,15 +570,30 @@ intros A; split.
 + intros [xl xr] u.
   (** There is a choice here... *)
   specialize (xl u u); specialize (xr u u).
-  destruct (dia_decidable _ u xl); [|exact xl].
-  destruct (dia_decidable _ u xr); [|exact xr].
+  destruct (rel_decidable _ u xl); [|exact xl].
+  destruct (rel_decidable _ u xr); [|exact xr].
   apply C_member.
 Defined.
+
+(* Definition dup' {A} : ⊢ !A ⊸ !A ⊗ !A.
+Proof.
+intros A; split.
++ intros u; split; exact u.
++ intros [xl xr] u.
+  induction A; simpl in *.
+  admit.
+  
+  (** There is a choice here... *)
+  specialize (xl u u); specialize (xr u u).
+  destruct (rel_decidable _ u xl); [|exact xl].
+  destruct (rel_decidable _ u xr); [|exact xr].
+  apply C_member.
+Defined. *)
 
 Instance Valid_dup {A} : Valid (@dup A).
 Proof.
 intros A; split; intros [u [xl xr]] H; simpl in *.
-repeat destruct dia_decidable; tauto.
+repeat destruct rel_decidable; tauto.
 Qed.
 
 Lemma dup_coalg : forall A, @dig A; bng_fun dup ≅ dup; tns_fun dig dig; bng_mon.
@@ -569,7 +607,7 @@ Lemma dig_comon : forall A, @dig A; dup ≅ dup; tns_fun dig dig.
 Proof.
 intros A Hext; simpl; f_equal.
 apply Hext; intros [zl zr]; apply Hext; intros u; simpl.
-repeat destruct dia_decidable; f_equal; simpl in *; tauto.
+repeat destruct rel_decidable; f_equal; simpl in *; tauto.
 Qed.
 
 Let dup_mon_comm {A B C D} : ⊢ (!A ⊗ !B) ⊗ (!C ⊗ !D) ⊸ (!A ⊗ !C) ⊗ (!B ⊗ !D).
@@ -588,7 +626,7 @@ intros A B Hext; simpl; f_equal.
 + apply Hext; intros [u v]; reflexivity.
 + apply Hext; intros [zl zr]; f_equal.
   - apply Hext; intros u; apply Hext; intros v.
-    repeat destruct dia_decidable; destruct (zl (u, v) (u, v)), (zr (u, v) (u, v)); try tauto.
+    repeat destruct rel_decidable; destruct (zl (u, v) (u, v)), (zr (u, v) (u, v)); try tauto.
 *)
 
 
@@ -600,7 +638,7 @@ apply Hext; intros [zl zr]; apply Hext; intros u; simpl in *.
 assert (Hfl := Hf (u, zl (fl u) (fl u))).
 assert (Hfr := Hf (u, zr (fl u) (fl u))).
 simpl in Hfl, Hfr.
-repeat destruct dia_decidable; f_equal; try tauto.
+repeat destruct rel_decidable; f_equal; try tauto.
 2: exfalso; specialize (Hf (u, zl (fl u) (fl u))); simpl in Hf; exfalso; tauto.
 exfalso.
 specialize (Hf (u, zl (fl u) (fl u))).
@@ -612,16 +650,16 @@ Definition undual {A} : ⊢ ((A ⊸ [false]) ⊸ [false]) ⊸ A.
 Proof.
 intros A; split.
 + intros [f g].
-  apply g; constructor.
+  apply g; apply daimon.
 + intros x; split.
   - split; [intros; constructor|intros; assumption].
-  - constructor.
+  - apply daimon.
 Defined.
 
 Instance Valid_undual {A} : Valid (@undual A).
 Proof.
 intros A; split; intros [[fl fr] x]; simpl.
-destruct (fr tt); simpl.
+destruct (fr daimon); simpl.
 tauto.
 Qed.
 
@@ -639,14 +677,17 @@ Definition wkn {A} : ⊢ !A ⊸ [true].
 Proof.
 intros A; split.
 + intros _; constructor.
-+ intros [] u.
++ intros ctx u.
 Admitted.
+
+Let par A B := opp (tns (opp A) (opp B)).
+Eval simpl in fun A B => W (par (whn A) (whn B)).
 
 Definition wkn' {A} : ⊢ A ⊸ [true].
 Proof.
 intros A; split.
 + intros _; constructor.
-+ intros []; apply C_member.
++ intros _; apply C_member.
 Defined.
 
 (* Lemma natural_wkn : forall A B (f : ⊢ A ⊸ B), Valid f -> bng_fun f; wkn ≅ wkn.
@@ -682,7 +723,7 @@ Definition absurd {A} : ⊢ [false] ⊸ A.
 Proof.
 intros A; split.
 + intros []; apply W_member.
-+ intros _; constructor.
++ intros _; apply C_member.
 Defined.
 
 Instance Valid_absurd : forall A, Valid (@absurd A).
@@ -749,10 +790,10 @@ Instance Valid_exists_elim : forall T A B f,
   (forall x, Valid (f x)) -> Valid (@exists_elim T A B f).
 Proof.
 intros T A B f Hf; split.
-intros [[t v] x]; apply dia_arr; intros H; simpl.
+intros [[t v] x]; apply rel_arr; intros H; simpl.
 specialize (Hf t); destruct Hf as [Hf].
 specialize (Hf (v, x)); simpl in *.
-destruct (f t) as [fl fr]; apply dia_not_not; tauto.
+destruct (f t) as [fl fr]; apply rel_not_not; tauto.
 Qed.
 
 Lemma exists_id : forall (T : Inhabited) (A : T -> prp) (B : prp) (t : T)
@@ -778,13 +819,130 @@ Instance Valid_Exists_elim : forall T A B f,
   (forall x, Valid (f x)) -> Valid (@Exists_elim T A B f).
 Proof.
 intros T A B f Hf; split.
-intros [[t w] x]; apply dia_arr; intros Hw; simpl in *.
+intros [[t w] x]; apply rel_arr; intros Hw; simpl in *.
 specialize (Hf t); destruct Hf as [Hf]; specialize (Hf (w, x)).
 destruct (f t); simpl in *.
-apply dia_not_not; tauto.
+apply rel_not_not; tauto.
 Qed.
 
+(* Definition gapp {Γ A B} (t : ⊢ !Γ ⊸ !A ⊸ B) (u : ⊢ !Γ ⊸ A) : ⊢ !Γ ⊗ !Γ ⊸ B :=
+  tns_fun t (dig; bng_fun u); eval.
 
+Lemma rw : forall Γ A B t u, snd (@gapp Γ A B t u) ≅
+  fun k => (
+    (fun x1 x2 => snd u (snd (fst t x1) k (fst u x2)) x2),
+    (fun x => snd t (fst u x, k))).
+Proof.
+intros Γ A B t u Hext; fold C W; unfold gapp, tns_fun, bng_fun; simpl; apply Hext.
+intros k; destruct u as [ul ur]; destruct t as [tl tr]; simpl.
+f_equal; apply Hext.
+intros e1; apply Hext.
+intros e2; destruct (tl e1); reflexivity.
+Qed.
+
+Eval compute -[C W C_member] in fun A B u => .
+
+Lemma toto : forall A, {Valid (W_member A)} + {Valid
+
+Definition t := Eval compute -[C W C_member] in fun Γ A B t u => snd (@gapp Γ A B t u).
+Extraction t.
+Eval compute in (snd t).
+
+Definition gapp {Γ A B} (t : ⊢ !Γ ⊸ !A ⊸ B) (u : ⊢ !Γ ⊸ A) : ⊢ !Γ ⊸ B.
+Proof.
+intros Γ A B [tl tr] [ul ur]; split; simpl in *.
++ intros w; specialize (tl w); destruct tl as [tl _].
+  apply tl, ul, w.
++ intros y w.
+  specialize (tl w); destruct tl as [_ tl].
+  specialize (ul w); specialize (tl y ul).
+  specialize (tr (ul, y) w).
+  specialize (ur tl w).
+  destruct (rel_decidable Γ w tr).
+  - apply ur.
+  - apply tr.
+Defined.
+
+Lemma Valid_gapp : forall Γ A B t u, Valid (@gapp Γ A B t u).
+Proof.
+intros Γ A B [tl tr] [ul ur]; split.
+intros [w y]; apply rel_arr; simpl; intros Hr.
+remember (tl w) as f.
+destruct f as [fl fr].
+destruct rel_decidable.
++ admit.
++ contradiction.*)
+
+Definition markov {A} : ⊢ (!?! A) ⊸ A.
+Proof.
+intros A; split; simpl.
++ intros f; apply f; intros _; apply C_member.
++ intros x f u; exact x.
+Defined.
+
+Lemma Valid_markov : forall A, Valid (@markov A).
+Proof.
+intros A; split; unfold markov; intros [u x]; apply rel_arr; simpl.
+intros Hr; apply rel_not_not in Hr.
+
+
+
+
+Definition em {A B} : ⊢ ?(A ⊕ (A ⊸ ? B)).
+Proof.
+intros A B [x [u y]]; simpl in *.
+destruct (rel_decidable A u x).
++ left; assumption.
++ right; split.
+  - intros; apply W_member.
+  - intros; assumption.
+Defined.
+
+Definition toto {A B} : ⊢ ? A ⊕ ? B ⊸ ? (A ⊕ B).
+Proof.
+intros A B; split.
++ intros [u|v] [kl kr]; simpl in *.
+  - left; apply u, kl.
+  - right; apply v, kr.
++ intros [x y]; split; assumption.
+Defined.
+
+Lemma Valid_em : forall A B, Valid (@em A B).
+Proof.
+intros A B; split.
+intros [x [u y]]; simpl; intros Hc; apply Hc; clear Hc.
+destruct rel_decidable as [Hd|Hd]; simpl.
++ assumption.
++ intros [Hc _]; contradiction.
+Qed.
+
+Definition callcc {A B} : ⊢ !(!(!A ⊸ ?! B) ⊸ ?! A) ⊸ ?! A.
+Proof.
+intros A B; split.
++ intros [fl fr] π.
+  simpl in *; apply fl; [|exact π]; split.
+  - intros; apply W_member.
+  - intro; exact π.
++ intros f [kl kr]; split.
+  - simpl; split.
+    { intros; apply W_member. }
+    { intro; exact f. }
+  - exact f.
+Defined.
+
+Lemma rel_not_not_stable : forall A u x, ~~ (rel A u x) <-> rel A u x.
+Proof.
+intros A u x; split; [apply rel_not_not|intuition].
+Qed.
+
+Lemma Valid_callcc : forall A B, Valid (@callcc A B).
+Proof.
+intros A B; exists.
+intros [[ul ur] π]; apply rel_arr; intros Hu.
+simpl in *.
+destruct ur as [u ρ].
+simpl in *.
+repeat rewrite rel_not_not_stable in *.
 (* Definition markov {P} : ⊢ ?!? P ⊸ P.
 Proof.
 intros P f; split; simpl in *.
@@ -797,11 +955,11 @@ Defined.*)
 
 (* Instance Valid_markov : forall P, Valid (@markov P).
 Proof.
-intros P; split; intros [w x]; apply dia_arr; intros Hw; simpl in *.
+intros P; split; intros [w x]; apply rel_arr; intros Hw; simpl in *.
 assumption.
 Qed. *)
 
-Definition markov_nat (T : Inhabited) (P : T -> prp) :
+(* Definition markov_nat (T : Inhabited) (P : T -> prp) :
   ⊢ ! (¬ (∀ x : T, ¬ (P x))) ⊸ ∃ x : T, !(P x).
 Proof.
 intros T P; split.
@@ -809,25 +967,84 @@ intros T P; split.
   intros x u; apply C_member.
 + simpl; intros w f t u.
   apply (w _ u).
+Defined.*)
+
+Inductive pos : prp -> Type :=
+| pos_one : pos [true]
+| pos_nul : pos [false]
+| pos_tns : forall A B, pos A -> pos B -> pos (A ⊗ B)
+| pos_sum : forall A B, pos A -> pos B -> pos (A ⊕ B).
+
+Lemma dup_pos : forall A, pos A -> ⊢ A ⊸ A ⊗ A.
+Proof.
+intros A HA; induction HA as [| |A B HA IHA HB IHB|A B HA IHA HB IHB];
+  (split; [intros u|intros [zl zr]]).
++ repeat constructor.
++ apply daimon.
++ repeat constructor.
++ apply daimon.
++ destruct u as [u v]; repeat split; assumption.
++ split.
+  - intros u. admit.
+  - admit.
+  
++ admit.
++ simpl. admit.
+Admitted.
+
+Definition search (p : N -> prp) (m : N) :
+  W (p 0) ->
+  (forall k : N, W (p k) -> W (p (S k))) ->
+  (forall k : N, W (p k) -> C (p k)) ->
+  C (p m) ->
+  C (p 0) + {n : N & (W (p n) * C (p (S n)))%type}.
+Proof.
+  intros p m z s b c.
+  induction m.
+  left; exact c.
+  pose (w := nat_rect _ z s m).
+  destruct (rel_decidable (p m) w (b m (w))) as [D1|D2].
+  right.
+  exists m.
+  exact (w, c).
+  apply IHm.
+  exact (b m (w)).
 Defined.
 
-Definition Nrec {P} : ⊢ P 0 ⊗ !(∀ n : N, P n ⊸ P (S n)) ⊸ (∀ m : N, P m).
+Eval simpl in fun A B => ⊣ par A B.
+Eval simpl in fun A B (w : ⊢ par A B) (z : ⊣ par A B) => rel (par A B) w z.
+
+(* Definition Nrec {P} : ⊢ !(P 0) ⊗ !(∀ n : N, !(P n) ⊸ P (S n)) ⊸ (∀ m : N, P m).
 Proof.
 intros P; split.
 + intros [H0 HS] m; induction m.
   - exact H0.
   - apply HS; assumption.
-+ intros [m Hm]; split.
++ simpl; intros [m Hm].
+  induction m as [|m]; split.
+  - intros u.
+
+split.
+  intros H0 HS.
+  apply 
+  Print search.
+  Extraction search.
++ intros [m Hm]; induction m as [|m]; split.
+  - intros H0 f; specialize (f 0); destruct f as [fl fr].
+    
+    exists 0; split; auto.
   - intros H0 f; simpl.
     exists m; split.
     { clear - H0 f; induction m; [assumption|apply f, IHm]. }
-    { clear - Hm f; induction m. simpl in f.
-    
+    { specialize (f m); destruct f as [_ f].
+    *)
 (** * Equality
 
    Next we verify the rules of equality. To keep things simple we only consider equality
    of natural numbers. In the general case we could consider decidable equality on an
    inhabited type. *)
+
+(*
 
 Definition prpEq (m n : N) := [beq_nat m n].
 
@@ -836,7 +1053,7 @@ Definition prpEq (m n : N) := [beq_nat m n].
 Theorem prpEq_eq (m n : N) (p : ⊢ prpEq m n) : Valid p -> m = n.
 Proof.
 intros m n p [Hp].
-specialize (Hp tt); simpl in Hp.
+specialize (Hp daimon); simpl in Hp.
 apply beq_nat_true.
 apply Is_true_eq_true.
 assumption.
@@ -852,21 +1069,25 @@ Defined.
 
 Instance Valid_eq_prpEq : forall m n, m = n -> Valid (eq_prpEq m n).
 Proof.
-intros m n Heq; split; intros []; simpl.
+intros m n Heq; split; intros x; simpl.
 apply Is_true_eq_left.
 apply beq_nat_true_iff; assumption.
 Qed.
 
 (** Reflexivity. *)
 
-Theorem prpEq_refl (n : N) : valid (prpEq n n).
+Theorem prpEq_refl (n : N) : Valid (eq_prpEq n n).
 Proof.
-  intros n.
-  apply eq_prpEq.
-  reflexivity.
+  intros n; split.
+  intros x; simpl.
+  rewrite <- beq_nat_refl; constructor.
 Qed.
 
 (** Leibniz's law as a rule of inference. *)
+
+Definition Leibniz {P : N -> prp} {m n : N} (e : ⊢ prpEq m n) (p : ⊢ P m) : ⊢ P n.
+Proof.
+intros P m n [].
 
 Theorem leibniz_rule (p : N -> prp) (m n : N) :
   valid (prpEq m n) -> valid (p m) -> valid (p n).
@@ -1026,7 +1247,7 @@ Proof.
   induction m.
   left; exact c.
   pose (w := nat_rect _ z s m).
-  destruct (dia_decidable (p m) w (b m (w, c))) as [D1|D2].
+  destruct (rel_decidable (p m) w (b m (w, c))) as [D1|D2].
   right.
   exists m.
   exact (w, c).
@@ -1053,7 +1274,7 @@ Proof.
   induction m; auto.
   unfold search; simpl.
   set (w := nat_rect (fun k : nat => W (p k)) z s m).
-  destruct (dia_decidable (p m) w (b m (w, c))) as [D1|D2]; simpl.
+  destruct (rel_decidable (p m) w (b m (w, c))) as [D1|D2]; simpl.
   intro H.
   apply H.
   apply D1.
@@ -1064,7 +1285,7 @@ Proof.
   apply G.
   apply H.
 Qed.
-
+*)
 (** Having done ordinary induction one is tempted to try validating induction for
    W-types... but not here. *)
 
@@ -1094,8 +1315,7 @@ Qed.
 Lemma primitive_trivial_C (b : bool) : trivial_C ([b]).
 Proof.
   intros b c.
-  case c; auto.
-Qed.
+Admitted.
 
 (** Whether there are trivial propositions, other than the primitive ones, depends on what
    extra axioms we have available. For example, in the presence of extensionality of
@@ -1107,7 +1327,7 @@ Qed.
 
 (** Is there a better way of getting the next lemma? *)
 
-Lemma pair_equal (X Y : Set) (p q : X * Y) :
+Lemma pair_equal (X Y : Type) (p q : X * Y) :
   fst p = fst q -> snd p = snd q -> p = q.
 Proof.
   intros X Y p q G H.
@@ -1122,13 +1342,13 @@ Qed.
    singleton is a singleton". *)
 
 Definition singleton_power :=
-  forall t, singleton t -> forall s : Set, singleton (inhabit (fun _ : s => member t)).
+  forall t, singleton t -> forall s : Type, singleton (inhabit (fun _ : s => member t)).
 
 (** I _think_ there is no way of proving [singleton_power], is there? We can use it to
    show that [W (p ==> q)] is trivial if [C p] and [W q] are trivial. *)
 
 Lemma implication_trivial_W (p q : prp) :
-  singleton_power -> trivial_C p -> trivial_W q -> trivial_W (p ==> q).
+  singleton_power -> trivial_C p -> trivial_W q -> trivial_W (p ⊸ q).
 Proof.
   intros p q E TCp TWq.
   unfold trivial_W.
@@ -1146,7 +1366,7 @@ Qed.
 
 (** Triviality of [C (p ==> q)] does not require any extra assumptions. *)
 Lemma implication_trivial_C (p q : prp) :
-  trivial_W p -> trivial_C q -> trivial_C (p ==> q).
+  trivial_W p -> trivial_C q -> trivial_C (p ⊸ q).
 Proof.
   intros p q TWp TCq.
   unfold trivial_C.
@@ -1162,12 +1382,32 @@ Qed.
 (** Markov principle holds for any inhabited type (not just the natural numbers) and
    a proposition which has trivial [W] and [C] types. *)
 
-Theorem markov_generalized (t : Inhabited) (p : t -> prp) :
-  (forall x, trivial_C (p x)) ->
-  (forall x, trivial_W (p x)) ->
-  valid (neg (all x : t, neg (p x)) ==> some x : t, p x).
+Theorem markov_generalized (T : Inhabited) (P : T -> prp) :
+  ⊢ ! (neg (∀ t : T, neg (P t))) ⊸ ∃ t : T, ! (P t).
 Proof.
-  intros t p TC TW.
+  intros T P; split.
+  + intros w; simpl in *; apply w.
+    intros t u; apply C_member.
+  + intros w z t; apply W_member.
+Defined.
+
+Lemma Valid_markov_generalized : forall T P,
+  (forall x, trivial_C (P x)) ->
+  (forall x, trivial_W (P x)) ->
+  Valid (markov_generalized T P).
+Proof.
+intros T P HC HW; split.
+intros [w z]; apply rel_arr; simpl in *; intros Hr Hc.
+let v := match goal with [ H : context [ w ?t ] |- _ ] => t end in
+destruct (w v) as [t Ht].
+let v := match goal with [ H : context [ w ?t ] |- _ ] => t end in
+destruct (w v) as [u Hu].
+simpl in *.
+apply rel_not_not in Hr.
+Qed.
+
+
+  simpl in *.
   unfold valid, C, W; simpl; fold C; fold W.
   pose (u := fun (h : _ -> {x : t & W (p x)})  =>
     let y := projT1 (h (fun x (_ : W (p x)) => C_member (p x))) in
@@ -1179,7 +1419,7 @@ Proof.
   set (w := projT2 (f (fun (x : t) (_ : W (p x)) => C_member (p x)))).
   rewrite (TC v (g v (W_member (p v)))).
   rewrite (TW v w).
-  apply dia_not_not_stable.
+  apply rel_not_not_stable.
 Qed.
 
 (** The usual Markov principle now follows easily. *)
