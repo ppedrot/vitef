@@ -6,6 +6,6 @@ Goal
   (forall A : Prop, False -> A) /\
   (forall A : Prop, A -> A -> A).
 Proof.
-repeat apply conj; fork idtac >> intuition eauto.
+fork (repeat apply conj) >> (intuition eauto).
 admit.
 Qed.
