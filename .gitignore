@@ -1,4 +1,10 @@
 *.vo
 *.glob
 *.d
+*.o
+*.cmo
+*.cmx
+*.cmi
+*.cmxs
+*.native
 Makefile.coq
