@@ -2,9 +2,14 @@
 *.glob
 *.d
 *.o
+*.a
 *.cmo
+*.cma
 *.cmx
 *.cmi
 *.cmxs
+*.cmxa
+*.mllib
 *.native
+*.bak
 Makefile.coq
