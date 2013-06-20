@@ -81,21 +81,25 @@ let spawn (process : (unit -> 'a) list) : 'a list =
   in
   List.map map process
 
-let fork_tac tac gl =
-  let tac = Tacinterp.eval_tactic tac in
-  let pts = Pfedit.get_pftreestate () in
-  let state = Proof.V82.subgoals pts in
+let fork_tac init tac gl =
+  let init = Tacinterp.eval_tactic init in
+  let state = init gl in
   let gls = Evd.sig_it state in
   let evd = Evd.sig_sig state in
-  let process gl () =
+  let tac = Tacinterp.eval_tactic tac in
+  let process gl = (); fun () ->
     let gl = { Evd.it = gl; sigma = evd } in
     let id = Names.Id.of_string "__fork__" in
     abstract id tac gl
   in
   let data = spawn (List.map process gls) in
-  let pr_data = function
-  | None -> Pp.str "--"
-  | Some t -> Printer.pr_constr t
+  let fold gl cstr (gls, evd) = match cstr with
+  | None -> (gl :: gls, evd)
+  | Some c ->
+    let goal = { Evd.it = gl; Evd.sigma = evd; } in
+    let ans = exact_no_check c goal in
+    let () = assert (CList.is_empty ans.Evd.it) in
+    gls, ans.Evd.sigma
   in
-  let msg = Pp.pr_vertical_list pr_data data in
-  tclIDTAC_MESSAGE msg gl
+  let (gls, evd) = List.fold_right2 fold gls data ([], evd) in
+  { Evd.it = gls; Evd.sigma = evd }

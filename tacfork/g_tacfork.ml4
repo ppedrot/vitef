@@ -1,5 +1,5 @@
 open Fork
 
 TACTIC EXTEND fork
-  | ["fork" tactic(tac) ] -> [ fork_tac tac ]
+  | ["fork" tactic(init) ">>" tactic(tac) ] -> [ fork_tac init tac ]
 END;;
