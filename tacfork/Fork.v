@@ -4,7 +4,7 @@ Declare ML Module "tacfork".
 
 It can be used with the following syntax:
 
-  tac >> f
+  fork tac >> f
 
 where [tac] and [f] are two tactics. The first tactic [tac] is used to generate
 a list of goals, and [f] is subsequently used to solve them, exactly as would do
