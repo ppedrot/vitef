@@ -1,14 +1,10 @@
-MODULES := fork.ml4 Fork.v
-NAME := Fork
-ROOT := ./
 .PHONY: coq clean
 
 coq: Makefile.coq
 	$(MAKE) -f Makefile.coq
 
-Makefile.coq: Makefile $(MODULES)
-	$(COQBIN)/coq_makefile -R $(ROOT) $(NAME) \
-		     $(MODULES) -o Makefile.coq
+Makefile.coq:
+	$(COQBIN)/coq_makefile -f Make -o Makefile.coq
 
 clean:: Makefile.coq
 	$(MAKE) -f Makefile.coq clean

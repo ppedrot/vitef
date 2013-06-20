@@ -99,7 +99,3 @@ let fork_tac tac gl =
   in
   let msg = Pp.pr_vertical_list pr_data data in
   tclIDTAC_MESSAGE msg gl
-
-TACTIC EXTEND fork
-  | ["fork" tactic(tac) ] -> [ fork_tac tac ]
-END;;
