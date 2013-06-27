@@ -1,3 +1,4 @@
 -R . Dialectica
 dialectica.v
+lambda.v
 extend.v
