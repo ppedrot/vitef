@@ -493,24 +493,69 @@ Lemma compose_bng_fun : forall A B C (f : ⊢ A ⊸ B) (g : ⊢ B ⊸ C),
 Proof.
 intros A B C [fl fr] [gl gr] Hext; simpl; f_equal.
 apply Hext; intros z.
-rewrite List.map_map; reflexivity.
+rewrite Rlist.map_set; [|assumption]; rewrite Rlist.set_set; [|assumption].
+rewrite Rlist.map_map; [|assumption]; reflexivity.
 Qed.
 
 Lemma id_bng_fun : forall A, bng_fun (@id A) ≅ id.
 Proof.
 intros A Hext; simpl; unfold id; f_equal.
-apply Hext; intros z; apply Hext; intros u.
-rewrite List.map_id; reflexivity.
+apply Hext; intros z.
+rewrite Rlist.map_id; [|assumption].
+rewrite Rlist.set_id; [|assumption].
+reflexivity.
 Qed.
+
+Fixpoint F_bng_mon {A B} (z : ⊣ !(A ⊗ B)) (u : W A) {struct z} : C (! B) :=
+match z with
+| Rlist.rnode n => Rlist.rnode (fun v => F_bng_mon_node (n (u, v)) u v)
+end
+
+with F_bng_mon_node {A B} (n : Rlist.Rnode (W (A ⊗ B)) (C (A ⊗ B))) (u : W A) (v : W B) {struct n} : Rlist.Rnode (W B) (C B) :=
+match n with
+| Rlist.rnil => Rlist.rnil
+| Rlist.rcons (fl, fr) z => Rlist.rcons (fl u) (F_bng_mon z u)
+end.
 
 Definition bng_mon {A B} : ⊢ !A ⊗ !B ⊸ !(A ⊗ B).
 Proof.
 intros A B; split.
 + intros [u v]; split; assumption.
 + intros z; split.
-  - intros u v.
+  -
+(*    revert z.
+    simpl in *.
+    refine (
+      fix F (z : ⊣ !(A ⊗ B)) (u : W A) {struct z} : C (! B) :=
+        match z with
+        | Rlist.rnode n => Rlist.rnode (fun v => F_node (n (u, v)) u v)
+        end
+      with F_node (n : Rlist.Rnode (W (A ⊗ B)) (C (A ⊗ B))) (u : W A) (v : W B) {struct n}
+        : Rlist.Rnode (W B) (C B) :=
+        match n with
+        | Rlist.rnil => Rlist.rnil
+        | Rlist.rcons (fl, fr) z => _
+        end
+      for F
+    ).
+    intros u.
+  
+    simpl in *.
+    set (fold (p : C (A ⊗ B)) (f : W A -> C (! B)) (u : W A) :=
+      match p with (fl, fr) => f u end).
+    
+    apply (Rlist.fold_right fold).*)
+    simpl in *.
+    intros u; apply Rlist.rnode; intros v.
+    destruct z as [n].
+    specialize (n (u, v)); destruct n as [|[xl xr] l].
+    { exact Rlist.rnil. }
+    { apply (Rlist.rcons (xl u)).
+    specialize (xr v).
+  refine (Rlist.fold_right _ u z _).
+    simpl in *.
     set (f := fun (p : C (A ⊗ B)) => match p with (f, _) => f u end).
-    apply (List.map f (z (u, v))).
+    apply (Rlist.map f (z (u, v))).
   - intros v u.
     set (f := fun (p : C (A ⊗ B)) => match p with (_, f) => f v end).
     apply (List.map f (z (u, v))).

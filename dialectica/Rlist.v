@@ -177,3 +177,21 @@ Proof.
   - reflexivity.
   - f_equal; apply map_map; assumption.
 Qed.
+
+Lemma map_id : forall R A l, @map R A A (@id _) l ≅ l
+with map_id_node : forall R A n, @map_node R A A (@id _) n ≅ n.
+Proof.
++ intros R A [n] Hext; simpl; f_equal; apply Hext; intros u; apply map_id_node; assumption.
++ intros R A [|x l] Hext; simpl.
+  - reflexivity.
+  - f_equal; apply map_id; assumption.
+Qed.
+
+Lemma set_id : forall R A l, @set R R A (@id _) l ≅ l
+with set_id_node : forall R A n, @set_node R R A (@id _) n ≅ n.
+Proof.
++ intros R A [n] Hext; simpl; f_equal; apply Hext; intros u; apply set_id_node; assumption.
++ intros R A [|x l] Hext; simpl.
+  - reflexivity.
+  - f_equal; apply set_id; assumption.
+Qed.
