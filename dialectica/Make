@@ -1,4 +1,7 @@
 -R . Dialectica
+Extensionality.v
+Rlist.v
 dialectica.v
+gdialectica.v
 lambda.v
 extend.v
