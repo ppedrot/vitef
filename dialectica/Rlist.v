@@ -1,15 +1,22 @@
 Require Import Extensionality.
 
 Set Implicit Arguments.
+Unset Elimination Schemes.
 
 Inductive Rlist (R : Type) (A : Type) := rnode : (R -> Rnode R A) -> Rlist R A
 with Rnode (R : Type) (A : Type) :=
 | rnil : Rnode R A
 | rcons : A -> Rlist R A -> Rnode R A.
 
+Definition t R A := Rlist R A.
+
 Arguments rnode [_ _] f.
 Arguments rnil [_ _].
 Arguments rcons [_ _] x l.
+
+Definition nil {R A} : Rlist R A := rnode (fun _ => rnil).
+Definition cons {R A} (x : R -> A) (l : Rlist R A) : Rlist R A :=
+  rnode (fun r => rcons (x r) l).
 
 Definition lift {R A} (x : A) := @rnode R A (fun _ => rcons x (rnode (fun _ => rnil))).
 
@@ -24,6 +31,17 @@ match n with
 | rcons x l => rcons (f x) (map f l)
 end.
 
+Fixpoint set {R S A} (g : S -> R) (l : Rlist R A) : Rlist S A :=
+match l with
+| rnode n => rnode (fun r => set_node g (n (g r)))
+end
+
+with set_node {R S A} (g : S -> R) (n : Rnode R A) :=
+match n with
+| rnil => rnil
+| rcons x l => rcons x (set g l)
+end.
+
 Fixpoint run {R A} (l : Rlist R A) (r : R) : list A :=
 match l with
 | rnode n => run_node (n r) r
@@ -31,8 +49,8 @@ end
 
 with run_node {R A} (n : Rnode R A) (r : R) : list A :=
 match n with
-| rnil => nil
-| rcons x l => cons x (run l r)
+| rnil => Datatypes.nil
+| rcons x l => Datatypes.cons x (run l r)
 end.
 
 Fixpoint app {R A} (l1 : Rlist R A) (l2 : Rlist R A) : Rlist R A :=
@@ -108,4 +126,28 @@ Proof.
   - simpl; rewrite <- concat_map; [|assumption].
     destruct x as [n]; simpl.
     apply concat_app_node; assumption.
+Qed.
+
+Fixpoint fold_right {R A B} (f : A -> (R -> B) -> (R -> B)) (accu : R -> B) (l : Rlist R A) (r : R) {struct l} : B :=
+match l with
+| rnode n => fold_right_node f accu (n r) r
+end
+
+with fold_right_node {R A B} (f : A -> (R -> B) -> (R -> B)) (accu : R -> B) (n : Rnode R A) (r : R) {struct n} : B :=
+match n with
+| rnil => accu r
+| rcons x l => f x (fold_right f accu l) r
+end.
+
+Lemma map_set : forall R S A B f g l,
+  @map S A B f (@set R S A g l) ≅ set g (map f l)
+with map_set_node : forall R S A B f g n,
+  @map_node S A B f (@set_node R S A g n) ≅ set_node g (map_node f n).
+Proof.
++ intros R S A B f g [n] Hext; simpl.
+  f_equal; apply Hext; intros s.
+  apply map_set_node; assumption.
++ intros R S A B f g [|x l] Hext; simpl.
+  - reflexivity.
+  - f_equal; apply map_set; assumption.
 Qed.

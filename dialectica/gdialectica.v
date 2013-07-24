@@ -15,7 +15,7 @@
    [Arith]. *)
 
 Require Import Bool Morphisms Setoid Extensionality.
-Require List.
+Require List Rlist.
 
 (** The following line is specific to Coq 8.3, but Coq 8.2 does not seem to be bothered by
    it, so luckily this file is compatible with both versions. *)
@@ -115,7 +115,7 @@ with C p :=
      | atm p => ctx
      | pls p1 p2 => (C p1) * (C p2) (* forall b : bool, match b with true => C p1 | false => C p2 end *)
      | tns p1 p2 => (W p1 -> C p2) * (W p2 -> C p1)
-     | bng p => W p -> list (C p)
+     | bng p => Rlist.t (W p) (C p)
      | opp p => W p
      | unv ty p' => { x : ty & C (p' x) }
    end)%type.
@@ -146,19 +146,15 @@ match z with
 | existT _ t u => R (A t) (w t) u
 end.
 
-Definition rel_bng {A} (R : forall X, W X -> C X -> Prop) :=
-fix F (u : W A) (z : list (C A)) :=
-match z with
-| nil => True
-| cons x z => R A u x /\ F u z
-end.
+Definition rel_bng {A} (R : forall X, W X -> C X -> Prop) (u : W (! A)) (z : C (! A)) :=
+  Rlist.fold_right (fun x P u => R A u x /\ P u) (fun _ => True) z u.
 
 Fixpoint rel (A : prp) : W A -> C A -> Prop :=
   match A return W A -> C A -> Prop with
     | atm p => (fun _ _ => Is_true p)
     | pls A B => rel_pls rel
     | tns A B => rel_tns rel
-    | bng A => fun (u : W A) (z : C (! A)) => rel_bng rel u (z u)
+    | bng A => rel_bng rel
     | opp A => (fun x u => ~ rel A u x)
     | unv T A => rel_unv rel
   end.
@@ -175,10 +171,20 @@ intros A u x; induction A; simpl.
   destruct u as [a1 | a2]; simpl; auto.
 + destruct u as [u v]; destruct x as [x y]; simpl.
   specialize (IHA1 u (y v)); specialize (IHA2 v (x u)); tauto.
-+ set (z := x u); clearbody z; clear x; induction z as [|x z]; simpl.
-  - intuition.
-  - destruct IHz as [IHz|IHz]; [|now intuition].
-    destruct (IHA u x) as [IH|IH]; intuition.
++ pose (f := fun x P u => rel A u x /\ P u).
+  pose (accu := fun (_ : W A) => True).
+  revert x; refine (
+  (fix F (x : C (! A)) := _
+  with F_node (n : Rlist.Rnode (W A) (C A)) :
+    {Rlist.fold_right_node f accu n u} + {~ Rlist.fold_right_node f accu n u}
+   := _ for F)).
+  - destruct x as [n]; unfold rel_bng; simpl.
+    apply F_node.
+  - destruct n as [|x l]; simpl.
+    { left; exact I. }
+    { destruct (F l) as [Hl|Hl]; [|right; unfold f, accu, rel_bng in *; now intuition].
+      destruct (IHA u x) as [Hx|Hx]; [|right; unfold f, accu, rel_bng in *; now intuition].
+      left; unfold f, accu, rel_bng in *; split; assumption. }
 + destruct (IHA x u); tauto.
 + destruct x as [t x]; simpl; intuition.
 Qed.
@@ -197,13 +203,6 @@ Proof.
 intros A B [wl wr] [zl zr]; split; intros H; simpl in *.
 + intros H'; apply rel_not_not; tauto.
 + tauto.
-Qed.
-
-Lemma rel_bng_spec : forall A u z, rel_bng rel u z <-> List.Forall (fun x => rel A u x) z.
-Proof.
-intros A u z; induction z as [|x z IH]; simpl; split; intros H; constructor; intuition.
-+ match goal with [ H : List.Forall ?P (?x :: ?z) |- _ ] => inversion H; subst; assumption end.
-+ match goal with [ H : List.Forall ?P (?x :: ?z) |- _ ] => inversion H; subst; intuition end.
 Qed.
 
 (** The predicate [valid p] is the Dialectica interpretation of [p]. It says that there is
@@ -448,8 +447,7 @@ Definition bng_fun {A B} (f : ⊢ A ⊸ B) : ⊢ !A ⊸ !B.
 Proof.
 intros A B [fl fr]; split.
 + intros u; apply (fl u).
-+ intros z u.
-  exact (List.map fr (z (fl u))).
++ intros z; apply (Rlist.set fl); apply (Rlist.map fr); assumption.
 Defined.
 
 Instance Valid_bng_fun {A B} : forall (f :  ⊢ A ⊸ B), Valid f -> Valid (bng_fun f).
