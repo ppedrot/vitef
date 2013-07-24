@@ -149,6 +149,27 @@ end.
 Definition rel_bng {A} (R : forall X, W X -> C X -> Prop) (u : W (! A)) (z : C (! A)) :=
   Rlist.fold_right (fun x P u => R A u x /\ P u) (fun _ => True) z u.
 
+Definition rel_bng_node {A} (R : forall X, W X -> C X -> Prop) (u : W A) (z : Rlist.Rnode (W A) (C A)) :=
+  Rlist.fold_right_node (fun x P u => R A u x /\ P u) (fun _ => True) z u.
+
+Lemma rel_bng_simpl : forall A R (u : W (! A)) (z : W A -> _),
+  @rel_bng A R u (Rlist.rnode z) = @rel_bng_node A R u (z u).
+Proof.
+intros A R u z; unfold rel_bng, rel_bng_node; simpl; reflexivity.
+Qed.
+
+Lemma rel_bng_nil : forall A R (u : W (! A)),
+  @rel_bng_node A R u Rlist.rnil = True.
+Proof.
+intros A R u; unfold rel_bng, rel_bng_node; simpl; reflexivity.
+Qed.
+
+Lemma rel_bng_cons : forall A R (u : W (! A)) (x : C A) (z : C (! A)),
+  @rel_bng_node A R u (Rlist.rcons x z) = (R A u x /\ rel_bng R u z).
+Proof.
+intros A R u x z; unfold rel_bng, rel_bng_node; simpl; reflexivity.
+Qed.
+
 Fixpoint rel (A : prp) : W A -> C A -> Prop :=
   match A return W A -> C A -> Prop with
     | atm p => (fun _ _ => Is_true p)
@@ -171,20 +192,18 @@ intros A u x; induction A; simpl.
   destruct u as [a1 | a2]; simpl; auto.
 + destruct u as [u v]; destruct x as [x y]; simpl.
   specialize (IHA1 u (y v)); specialize (IHA2 v (x u)); tauto.
-+ pose (f := fun x P u => rel A u x /\ P u).
-  pose (accu := fun (_ : W A) => True).
-  revert x; refine (
++ revert x; refine (
   (fix F (x : C (! A)) := _
   with F_node (n : Rlist.Rnode (W A) (C A)) :
-    {Rlist.fold_right_node f accu n u} + {~ Rlist.fold_right_node f accu n u}
+    {@rel_bng_node A rel u n} + {~ @rel_bng_node A rel u n}
    := _ for F)).
-  - destruct x as [n]; unfold rel_bng; simpl.
+  - destruct x as [n]; rewrite rel_bng_simpl.
     apply F_node.
   - destruct n as [|x l]; simpl.
-    { left; exact I. }
-    { destruct (F l) as [Hl|Hl]; [|right; unfold f, accu, rel_bng in *; now intuition].
-      destruct (IHA u x) as [Hx|Hx]; [|right; unfold f, accu, rel_bng in *; now intuition].
-      left; unfold f, accu, rel_bng in *; split; assumption. }
+    { rewrite rel_bng_nil; left; exact I. }
+    { rewrite rel_bng_cons.
+      destruct (F l); [|intuition].
+      destruct (IHA u x); intuition. }
 + destruct (IHA x u); tauto.
 + destruct x as [t x]; simpl; intuition.
 Qed.
@@ -455,17 +474,25 @@ Proof.
 intros A B [fl fr] [Hf]; split; intros [u y]; apply rel_arr; intros H.
 simpl in *.
 assert (Hf' := fun u y => Hf (u, y)); simpl in Hf'; clear Hf.
-induction (y (fl u)) as [|x z]; simpl.
-+ trivial.
-+ simpl in *; split; [|now intuition].
-  specialize (Hf' u x); apply rel_not_not; intros Hc; intuition.
+revert y H; refine (
+(fix F (y : C (! B)) (H : _) := _
+with F_node (n : Rlist.Rnode (W B) (C B)) (H : rel_bng_node rel u (Rlist.set_node fl (Rlist.map_node fr n))) :
+  rel_bng_node rel (fl u) n
+ := _ for F)).
++ destruct y as [n]; simpl in *; rewrite rel_bng_simpl in *.
+  apply F_node, H.
++ destruct n as [|x l].
+  - rewrite rel_bng_nil; trivial.
+  - simpl in H; rewrite rel_bng_cons in *; split.
+   { apply rel_not_not; intros Hc; elim (Hf' u x); intuition. }
+   { apply F; intuition. }
 Qed.
 
 Lemma compose_bng_fun : forall A B C (f : ⊢ A ⊸ B) (g : ⊢ B ⊸ C),
   bng_fun (f; g) ≅ bng_fun f; bng_fun g.
 Proof.
 intros A B C [fl fr] [gl gr] Hext; simpl; f_equal.
-apply Hext; intros z; apply Hext; intros u.
+apply Hext; intros z.
 rewrite List.map_map; reflexivity.
 Qed.
 

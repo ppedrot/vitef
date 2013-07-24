@@ -151,3 +151,29 @@ Proof.
   - reflexivity.
   - f_equal; apply map_set; assumption.
 Qed.
+
+Lemma set_set : forall R S T A f g l,
+  @set S T A g (@set R S A f l) ≅ set (fun r => f (g r)) l
+with set_set_node : forall R S T A f g n,
+  @set_node S T A g (@set_node R S A f n) ≅ set_node (fun r => f (g r)) n.
+Proof.
++ intros R S T A f g [n] Hext.
+  simpl; f_equal; apply Hext; intros r.
+  apply set_set_node; assumption.
++ intros R S T A f g [|x l] Hext; simpl.
+  - reflexivity.
+  - f_equal; apply set_set; assumption.
+Qed.
+
+Lemma map_map : forall R A B C f g l,
+  @map R B C g (@map R A B f l) ≅ map (fun x => g (f x)) l
+with map_map_node : forall R A B C f g n,
+  @map_node R B C g (@map_node R A B f n) ≅ map_node (fun x => g (f x)) n.
+Proof.
++ intros R A B C f g [n] Hext.
+  simpl; f_equal; apply Hext; intros r.
+  apply map_map_node; assumption.
++ intros R A B C f g [|x l] Hext; simpl.
+  - reflexivity.
+  - f_equal; apply map_map; assumption.
+Qed.
