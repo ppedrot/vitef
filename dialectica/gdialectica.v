@@ -97,8 +97,7 @@ Notation "∃ x : t , p" :=  (@ext t (fun x => p)) (at level 80, x at level 99).
    Indeed, we are going to investigate it in a separate file. For now we are just trying
    to faithfully represent the Dialectica interpretation. *)
 
-Variable ctx : Type.
-Variable daimon : ctx.
+Inductive ctx := ctx_intro : list ctx -> ctx.
 
 Fixpoint W (p : prp) : Type :=
   (match p with
@@ -119,6 +118,22 @@ with C p :=
      | opp p => W p
      | unv ty p' => { x : ty & C (p' x) }
    end)%type.
+
+Fixpoint run {A : prp} : W A -> C A -> ctx.
+Proof.
+intros []; simpl.
++ intros; assumption.
++ intros A B [u|v] [zl zr]; [apply (@run A)|apply (@run B)]; assumption.
++ intros A B [u v] [zl zr].
+  pose (rl := run _ u (zr v)); pose (rr := run _ v (zl u)).
+  apply rl.
++ intros A u z;
+  pose (r := List.map (run A u) (Rlist.run z u)).
+  apply (ctx_intro r).
++ intros A x u; apply (run A u x).
++ intros T A w [t z].
+  apply (run (A t) (w t) z).
+Defined.
 
 (** The relation [rel p w c] is what is usually written as [p_D] in the Dialectica
    interpretation, i.e., the matrix of the interpreted formula.
@@ -171,19 +186,17 @@ intros A R u x z; unfold rel_bng, rel_bng_node; simpl; reflexivity.
 Qed.
 
 Lemma rel_bng_app : forall A R (u : W (! A)) (zl : C (! A)) (zr : C (! A)),
-  @rel_bng A R u (Rlist.app zl zr) <-> @rel_bng A R u zl /\ @rel_bng A R u zr.
+  @rel_bng A R u (Rlist.app zl zr) <-> @rel_bng A R u zl /\ @rel_bng A R u zr
+with rel_bng_app_node : forall A R (u : W (! A)) (nl : Rlist.Rnode (W A) (C A)) (zr : C (! A)),
+  @rel_bng_node A R u (Rlist.app_node nl zr u) <-> @rel_bng_node A R u nl /\ @rel_bng A R u zr.
 Proof.
-intros A R u zl zr; revert zl.
-refine (
-  fix F zl {struct zl} := _
-  with F_node (n : Rlist.Rnode _ _) {struct n} : (_ n) := _ for F).
-+ destruct zl as [nl]; simpl in *; fold (W A).
++ intros A R u [nl] zr; simpl in *; fold (W A).
   rewrite 2 rel_bng_simpl.
-  pattern (nl u); apply F_node.
-+ destruct n as [|x zl]; simpl in *.
-  - clear F F_node; destruct zr as [nr].
+  pattern (nl u); apply rel_bng_app_node.
++ intros A R u [|x zl] zr; simpl in *.
+  - destruct zr as [nr].
     rewrite rel_bng_nil, rel_bng_simpl; tauto.
-  - specialize (F zl).
+  - specialize (rel_bng_app A R u zl zr).
     rewrite 2 rel_bng_cons; intuition.
 Qed.
 
@@ -339,6 +352,15 @@ Instance Valid_tns_assoc : forall A B C, Valid (@tns_assoc A B C).
 Proof.
 intros A B C; split; intros [[[u v] w] [zl zr]]; simpl.
 destruct (zl u); tauto.
+Qed.
+
+Definition idl {A} : ⊢ [true] ⊗ A ⊸ A.
+Proof.
+intros A; split.
++ intros [[] u]; exact u.
++ intros x; split.
+  - intros []; exact x.
+  - intros _; apply ctx_intro; exact nil.
 Qed.
 
 (** *)
@@ -568,6 +590,25 @@ intros A B C D [fl fr] [gl gr] Hext; simpl; f_equal.
     repeat f_equal; apply Hext; intros [xl xr]; reflexivity.
 Qed.
 
+Definition bng_Mon : ⊢ [true] ⊸ ![true].
+Proof.
+split.
++ intros []; exact tt.
++ simpl; intros z.
+  constructor; exact (Rlist.run z tt).
+Defined.
+
+Lemma Valid_bng_Mon : Valid bng_Mon.
+Proof.
+split; intros [[] x]; apply rel_arr; intros []; simpl in *; revert x.
+refine (fix F (x : Rlist.Rlist unit ctx) := _ with F_node (n : Rlist.Rnode _ _) : _ n := _ for F).
++ destruct x as [n]; rewrite rel_bng_simpl; simpl.
+  apply (F_node (n tt)).
++ destruct n as [|x l].
+  - rewrite rel_bng_nil; trivial.
+  - rewrite rel_bng_cons; simpl; split; [trivial|apply F].
+Qed.
+
 Definition der {A} : ⊢ !A ⊸ A.
 Proof.
 intros A; split.
@@ -633,29 +674,33 @@ Proof.
 intros A Hext; unfold dig, der, id; simpl; f_equal.
 apply Hext; intros [n]; unfold Datatypes.id; simpl.
 f_equal; apply Hext; intros u.
+rewrite Rlist.app_id_r_node; trivial.
 Qed.
 
 Lemma dig_der_id_2 : forall A, @dig A; bng_fun der ≅ id.
 Proof.
 intros A Hext; unfold dig, der, id; simpl; f_equal.
-apply Hext; intros z; apply Hext; intros u.
-rewrite List.map_map.
-unfold Datatypes.id; set (Z := z u) in *; clearbody Z; clear z.
-induction Z as [|x z IH]; simpl.
-+ reflexivity.
-+ rewrite IH; reflexivity.
+apply Hext; intros z; unfold Datatypes.id.
+rewrite Rlist.set_id; [|assumption]; revert z.
+refine (fix F (z : C (! A)) {struct z} := _
+  with F_node (n : Rlist.Rnode _ _) u {struct n} : _ n u := _ for F).
++ destruct z as [n]; simpl; f_equal.
+  apply Hext; intros u.
+  set (N := n u) in *; clearbody N; clear n.
+  pattern N, u; apply F_node.
++ destruct n as [|x [n]]; simpl in *.
+  - reflexivity.
+  - repeat f_equal; apply Hext; intros u'.
+    apply F_node.
 Qed.
 
 Lemma dig_assoc : forall A, @dig A; dig ≅ dig; bng_fun dig.
 Proof.
 intros A Hext; unfold dig; simpl; f_equal.
-apply Hext; intros z; apply Hext; intros u; repeat f_equal.
-set (Z := z u); clearbody Z; clear z; induction Z as [|x z IH].
-+ reflexivity.
-+ simpl; rewrite IH; clear IH.
-  induction z as [|y z IHz]; simpl.
-  - rewrite List.app_nil_r.
-Admitted.
+apply Hext; intros z.
+rewrite Rlist.set_id; [|assumption].
+apply Rlist.concat_map; assumption.
+Qed.
 
 Lemma der_mon : forall A B, @bng_mon A B; der ≅ tns_fun der der.
 Proof.
@@ -668,104 +713,151 @@ Proof.
 intros A B Hext; simpl; f_equal.
 + apply Hext; intros [u v]; reflexivity.
 + apply Hext; intros z; f_equal.
-  - apply Hext; intros u; apply Hext; intros v.
-    rewrite List.concat_map; rewrite ?List.map_map; reflexivity.
-  - apply Hext; intros u; apply Hext; intros v.
-    rewrite List.concat_map; rewrite ?List.map_map; reflexivity.
+  - apply Hext; intros u.
+    rewrite Rlist.map_concat; [|assumption].
+    rewrite Rlist.set_concat; [|assumption].
+    repeat f_equal.
+    rewrite Rlist.map_set; [|assumption].
+    do 2 (rewrite Rlist.map_map; [|assumption]).
+    rewrite <- Rlist.map_set; [|assumption].
+    f_equal.
+    rewrite <- (Rlist.set_id z Hext) at 1; f_equal.
+    apply Hext; intros [? ?]; reflexivity.
+  - apply Hext; intros u.
+    rewrite Rlist.map_concat; [|assumption].
+    rewrite Rlist.set_concat; [|assumption].
+    repeat f_equal.
+    rewrite Rlist.map_set; [|assumption].
+    do 2 (rewrite Rlist.map_map; [|assumption]).
+    rewrite <- Rlist.map_set; [|assumption].
+    f_equal.
+    rewrite <- (Rlist.set_id z Hext) at 1; f_equal.
+    apply Hext; intros [? ?]; reflexivity.
+Qed.
+
+Definition wkn {A} : ⊢ !A ⊸ [true].
+Proof.
+intros A; split.
++ intros _; constructor.
++ intros x; simpl in *.
+  exact Rlist.nil.
+Defined.
+
+Instance Valid_wkn {A} : Valid (@wkn A).
+Proof.
+intros A; split.
+intros [u x]; apply rel_arr; intros H; simpl in *.
+trivial.
+Qed.
+
+Lemma natural_wkn : forall A B (f : ⊢ A ⊸ B), bng_fun f; (@wkn B) ≅ wkn.
+Proof.
+intros A B [fl fr] Hext; unfold wkn; simpl; f_equal.
 Qed.
 
 Definition dup {A} : ⊢ !A ⊸ !A ⊗ !A.
 Proof.
 intros A; split.
 + intros u; split; exact u.
-+ intros [xl xr] u.
-  (** There is a choice here... *)
-  specialize (xl u u); specialize (xr u u).
-  exact (xl ++ xr)%list.
++ intros [xl xr].
+  exact (Rlist.app (Rlist.collapse xl) (Rlist.collapse xr)).
 Defined.
-
-(* Definition dup' {A} : ⊢ !A ⊸ !A ⊗ !A.
-Proof.
-intros A; split.
-+ intros u; split; exact u.
-+ intros [xl xr] u.
-  induction A; simpl in *.
-  admit.
-  
-  (** There is a choice here... *)
-  specialize (xl u u); specialize (xr u u).
-  destruct (rel_decidable _ u xl); [|exact xl].
-  destruct (rel_decidable _ u xr); [|exact xr].
-  apply C_member.
-Defined. *)
 
 Instance Valid_dup {A} : Valid (@dup A).
 Proof.
-intros A; split; intros [u [xl xr]]; apply rel_arr; intros H.
-simpl in *.
-set (X := xl u u) in *; set (Y := xr u u) in *; clearbody X Y; clear xl xr.
-induction X as [|x xl IH]; simpl in *; intuition.
+intros A; split; intros [u [xl xr]]; apply rel_arr; intros H; simpl in *.
+unfold Rlist.collapse in *; rewrite rel_bng_simpl in H.
+destruct (xl u) as [n]; simpl in *.
+rewrite rel_bng_simpl; apply rel_bng_app_node in H.
+split; [|intuition].
+destruct H as [_ H]; rewrite rel_bng_simpl in H; clear n xl.
+destruct (xr u) as [n].
+exact H.
 Qed.
 
-Lemma dup_coalg : forall A, @dig A; bng_fun dup ≅ dup; tns_fun dig dig; bng_mon.
+Lemma natural_dup : forall A B (f : ⊢ A ⊸ B),
+  bng_fun f; dup ≅ dup; tns_fun (bng_fun f) (bng_fun f).
 Proof.
-intros A Hext; simpl; f_equal.
-apply Hext; intros z; apply Hext; intros u.
-rewrite ?List.map_map.
-set (Z := z (u, u)); clearbody Z; clear z.
-induction Z as [|[xl xr] z IH]; simpl.
-+ reflexivity.
-+ rewrite IH; f_equal.
+intros A B [fl fr] Hext; simpl; f_equal.
+apply Hext; intros [xl xr]; simpl; f_equal.
+apply Hext; intros u; unfold Rlist.collapse; simpl.
+set (Xl := xl (fl u)); clearbody Xl; clear xl; destruct Xl as [nl]; simpl.
+rewrite Rlist.map_app_node; [|assumption].
+rewrite Rlist.set_app_node; [|assumption]; simpl; repeat f_equal.
+clear u; apply Hext; intros u.
+set (Xr := xr (fl u)); clearbody Xr; clear xr; destruct Xr as [nr]; simpl.
+reflexivity.
 Qed.
 
 Lemma dig_comon : forall A, @dig A; dup ≅ dup; tns_fun dig dig.
 Proof.
 intros A Hext; simpl; f_equal.
-apply Hext; intros [zl zr]; apply Hext; intros u; simpl.
-repeat destruct rel_decidable; f_equal; simpl in *; tauto.
+apply Hext; intros [zl zr].
+unfold Rlist.collapse; simpl; f_equal; apply Hext; intros u.
+set (Zl := zl u); clearbody Zl; clear zl; destruct Zl as [n]; simpl.
+rewrite Rlist.concat_app_node; [|assumption]; f_equal; simpl; f_equal.
+clear u n; apply Hext; intros u.
+set (Zr := zr u); clearbody Zr; clear zr; destruct Zr as [n]; simpl.
+reflexivity.
 Qed.
 
-Let dup_mon_comm {A B C D} : ⊢ (!A ⊗ !B) ⊗ (!C ⊗ !D) ⊸ (!A ⊗ !C) ⊗ (!B ⊗ !D).
+Let dup_mon_comm {A B C D} : ⊢ (A ⊗ B) ⊗ (C ⊗ D) ⊸ (A ⊗ C) ⊗ (B ⊗ D).
 Proof.
-intros A B; split; simpl.
+intros A B C D; split; simpl.
 + intros [[a b] [c d]]; repeat split; assumption.
 + intros [zl zr]; split.
-  - intros [a b]; split; [intros c d; apply zl|intros d c; apply zr]; repeat split; auto.
-  - intros [c d]; split; [intros a b; apply zl|intros b a; apply zr]; repeat split; auto.
+  - intros [a b]; split; [intros c; apply zl|intros d; apply zr]; repeat split; auto.
+  - intros [c d]; split; [intros a; apply zl|intros b; apply zr]; repeat split; auto.
 Defined.
 
-(* Lemma dup_mon : forall A B,
+Lemma dup_mon : forall A B,
   @bng_mon A B; dup ≅ tns_fun dup dup; dup_mon_comm; tns_fun bng_mon bng_mon.
 Proof.
 intros A B Hext; simpl; f_equal.
 + apply Hext; intros [u v]; reflexivity.
 + apply Hext; intros [zl zr]; f_equal.
-  - apply Hext; intros u; apply Hext; intros v.
-    repeat destruct rel_decidable; destruct (zl (u, v) (u, v)), (zr (u, v) (u, v)); try tauto.
-*)
+  - apply Hext; intros u; simpl; f_equal.
+    apply Hext; intros v; simpl.
+    set (Zl := zl (u, v)); clearbody Zl; clear zl; destruct Zl as [nl]; simpl.
+    rewrite Rlist.map_app_node; [|assumption].
+    rewrite Rlist.set_app_node; [|assumption].
+    repeat f_equal.
+    unfold Rlist.collapse; simpl; f_equal.
+    clear v; apply Hext; intros v.
+    set (Zr := zr (u, v)); clearbody Zr; clear zr; destruct Zr as [nr]; simpl.
+    reflexivity.
+  - apply Hext; intros v; simpl; f_equal.
+    apply Hext; intros u; simpl.
+    set (Zl := zl (u, v)); clearbody Zl; clear zl; destruct Zl as [nl]; simpl.
+    set (Nl := nl (u, v)); clearbody Nl; clear nl; destruct Nl as [|[xl xr] zl]; simpl.
+    { set (Zr := zr (u, v)); clearbody Zr; destruct Zr as [nr]; reflexivity. }
+    { f_equal; unfold Rlist.collapse.
+      rewrite Rlist.map_app; [|assumption].
+      rewrite Rlist.set_app; [|assumption]; f_equal; simpl; f_equal.
+      clear u; apply Hext; intros u.
+      set (Zr := zr (u, v)); clearbody Zr; clear zr; destruct Zr as [nr]; simpl.
+      reflexivity. }
+Qed.
 
-
-(*Lemma natural_dup : forall A B (f : ⊢ A ⊸ B), Valid f ->
-  bng_fun f; dup ≅ dup; tns_fun (bng_fun f) (bng_fun f).
+Lemma dup_coalg : forall A, @dig A; bng_fun dup ≅ dup; tns_fun dig dig; bng_mon.
 Proof.
-intros A B [fl fr] [Hf] Hext; f_equal; simpl; f_equal.
-apply Hext; intros [zl zr]; apply Hext; intros u; simpl in *.
-assert (Hfl := Hf (u, zl (fl u) (fl u))).
-assert (Hfr := Hf (u, zr (fl u) (fl u))).
-simpl in Hfl, Hfr.
-repeat destruct rel_decidable; f_equal; try tauto.
-2: exfalso; specialize (Hf (u, zl (fl u) (fl u))); simpl in Hf; exfalso; tauto.
-exfalso.
-specialize (Hf (u, zl (fl u) (fl u))).
- simpl in Hf.
-
-Qed.*)
+intros A Hext; simpl; f_equal.
+apply Hext; intros [n]; simpl; f_equal; fold (W A).
+apply Hext; intros u; unfold Rlist.collapse; simpl.
+rewrite <- ?Rlist.map_set_node; try assumption.
+remember (n (u, u)) as N; destruct N as [|[xl xr] z]; simpl.
++ let H := match goal with [ H : _ = n (u, u) |- _ ] => H end in rewrite <- H.
+  reflexivity.
++ remember (xl u) as Xl; destruct Xl as [nl]; simpl; repeat f_equal.
+  - destruct z as [m]; simpl; f_equal; apply Hext; intros u'.
+    remember (m (u, u')) as Z; destruct Z as [|X Z]; simpl.
+Admitted.
 
 Definition undual {A} : ⊢ ((A ⊸ [false]) ⊸ [false]) ⊸ A.
 Proof.
 intros A; split.
-+ intros [f g].
-  apply g; apply daimon.
++ intros [f g]; simpl in *.
+  apply g; .
 + intros x; split.
   - split; [intros; constructor|intros; assumption].
   - apply daimon.

@@ -254,3 +254,13 @@ Proof.
   - reflexivity.
   - f_equal; apply set_id; assumption.
 Qed.
+
+Definition collapse {R A} (f : R -> Rlist R A) : Rlist R A :=
+  rnode (fun r => match f r with rnode n => n r end).
+
+Lemma collapse_app : forall R A f g,
+  @collapse R A (fun r => app (f r) (collapse g)) ≅ app (collapse f) (collapse g).
+Proof.
+intros R A f g Hext; unfold collapse; simpl; f_equal.
+apply Hext; intros r; destruct (f r) as [n]; simpl; reflexivity.
+Qed.
