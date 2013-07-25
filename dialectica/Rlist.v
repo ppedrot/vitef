@@ -64,6 +64,25 @@ match n with
 | rcons x l1 => fun r => rcons x (app l1 l2)
 end.
 
+Lemma app_id_r : forall R A l,
+  @app R A l nil ≅ l
+with app_id_r_node : forall R A n r,
+  @app_node R A n nil r ≅ n.
+Proof.
++ intros R A [n] Hext; simpl.
+  f_equal; apply Hext; intros r.
+  apply app_id_r_node; assumption.
++ intros R A [|x l] r Hext; simpl.
+  - reflexivity.
+  - f_equal; apply app_id_r; assumption.
+Qed.
+
+Lemma app_id_l : forall R A (l : Rlist R A),
+  @app R A nil l ≅ l.
+Proof.
+intros R A [n] Hext; simpl; f_equal.
+Qed.
+
 Lemma map_app : forall R A B (f : A -> B) l1 l2,
   @map R A B f (app l1 l2) ≅ app (map f l1) (map f l2)
 with map_app_node : forall R A B (f : A -> B) n1 l2 r,
@@ -74,6 +93,18 @@ Proof.
 + intros R A B f n1 l2 r Hext.
   destruct n1 as [|x l1]; [destruct l2 as [n2]; reflexivity|].
   simpl; f_equal; apply map_app; assumption.
+Qed.
+
+Lemma set_app : forall R S A (g : S -> R) l1 l2,
+  @set R S A g (app l1 l2) ≅ app (set g l1) (set g l2)
+with set_app_node : forall R S A (g : S -> R) n1 l2 r,
+  @set_node R S A g (app_node n1 l2 (g r)) ≅ app_node (set_node g n1) (set g l2) r.
+Proof.
++ intros R S A f [n1] l2 Hext; simpl.
+  f_equal; apply Hext; intros r; apply set_app_node; assumption.
++ intros R S A f n1 l2 r Hext.
+  destruct n1 as [|x l1]; [destruct l2 as [n2]; reflexivity|].
+  simpl; f_equal; apply set_app; assumption.
 Qed.
 
 Fixpoint concat {R A} (l : Rlist R (Rlist R A)) : Rlist R A :=
@@ -126,6 +157,34 @@ Proof.
   - simpl; rewrite <- concat_map; [|assumption].
     destruct x as [n]; simpl.
     apply concat_app_node; assumption.
+Qed.
+
+Lemma map_concat : forall R A B (f : A -> B) (l : Rlist R (Rlist R A)),
+  map f (concat l) ≅ concat (map (map f) l)
+with map_concat_node : forall R A B (f : A -> B) (n : Rnode R (Rlist R A)) r,
+  map_node f (concat_node n r) ≅ concat_node (map_node (map f) n) r.
+Proof.
++ intros R A B f [n] Hext; simpl.
+  f_equal; apply Hext; intros r.
+  apply map_concat_node; assumption.
++ intros R A B f [|[n] l] r Hext; simpl.
+  - reflexivity.
+  - rewrite map_app_node; [|assumption].
+    f_equal; apply map_concat; assumption.
+Qed.
+
+Lemma set_concat : forall R S A (g : S -> R) (l : Rlist R (Rlist R A)),
+  set g (concat l) ≅ concat (set g (map (set g) l))
+with set_concat_node : forall R S A (g : S -> R) (n : Rnode R (Rlist R A)) r,
+  set_node g (concat_node n (g r)) ≅ concat_node (set_node g (map_node (set g) n)) r.
+Proof.
++ intros R S A g [n] Hext; simpl.
+  f_equal; apply Hext; intros r.
+  apply set_concat_node; assumption.
++ intros R S A g [|[n] l] r Hext; simpl.
+  - reflexivity.
+  - rewrite set_app_node; [|assumption].
+    f_equal; apply set_concat; assumption.
 Qed.
 
 Fixpoint fold_right {R A B} (f : A -> (R -> B) -> (R -> B)) (accu : R -> B) (l : Rlist R A) (r : R) {struct l} : B :=
