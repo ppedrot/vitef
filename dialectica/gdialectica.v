@@ -857,7 +857,7 @@ Definition undual {A} : ⊢ ((A ⊸ [false]) ⊸ [false]) ⊸ A.
 Proof.
 intros A; split.
 + intros [f g]; simpl in *.
-  apply g; .
+  apply g.
 + intros x; split.
   - split; [intros; constructor|intros; assumption].
   - apply daimon.
