@@ -185,7 +185,7 @@ u)}\\
     \left({\interp{\prf{\oc\Gamma, x : A}{t}{B}}^-(y)}\right)^-(u)
 \end{array}\right\} \\
 
-\interp{\prf{\oc\Gamma}{t u}{B}} & = &
+\interp{\prf{\oc\Gamma}{t\, u}{B}} & = &
 % \interp{\prf{\oc\Gamma}{t}{\oc{A} \multimap B}}
 % \interp{\prf{\oc\Gamma}{u}{A}}
 \left\{\begin{array}{l}
@@ -207,7 +207,11 @@ u)}\\
         {\kappa}
         {{\interp{\prf{\oc\Gamma}{u}{A}}}^-(\mathbf{t}^-\ y\ \mathbf{u})}
         {\\\quad
-          \ifthen{\gamma\perp_{\oc{\Gamma}}\kappa}{\kappa\ \gamma}{\\\qquad}}
+          \ifthen{\gamma\perp_{\oc{\Gamma}}\kappa}{\kappa\ \gamma}
+          {\\\qquad
+            {\interp{\prf{\oc\Gamma}{t}{\oc{A}\multimap B}}^-(\mathbf{u}, y)\ 
+              \gamma}}
+        }
         }
       }
     }
@@ -250,8 +254,7 @@ for every free variable $x : \Gamma_i$, a stack transformer $t_x : \cproof{A}
 
 What does this transformer do? Actually, it is quite simple: $t_x(\pi)$ 
 returns the first valid stack encountered by the variable $x$ while evaluating 
-$\langle t \mid \pi \rangle$. To make things clearer, please refer to the
-following section.
+$\langle t \mid \pi \rangle$, as explained in the following section.
 
 \subsection{The abstract machine}
 
@@ -268,10 +271,16 @@ $$\begin{array}{lccl}
 The machine evaluates processes $\process{(t, \sigma)}{\pi}$ with the
 following reduction rules:
 
-$$\begin{array}{lccl}
-
-   
+$$\begin{array}{rcl}
+\process{(\lambda x.t, \sigma)}{c \cdot \pi} & \rightarrow &
+  \process{(t, \sigma + (x := c)}{\pi}\\
+\process{(t\, u, \sigma)}{\pi} & \rightarrow &
+  \process{(t, \sigma)}{(u, \sigma) \cdot \pi}\\
 \end{array}$$
+
+$$\begin{array}{lccl}
+\text{Terms} & t &::=& \hdots \mid \mathtt{set}\ x\ \mathtt{in}\ t\\
+\end{array}$$\bigskip
 
 \section{The ListT variant}
 
