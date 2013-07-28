@@ -1,0 +1,207 @@
+\documentclass[a4paper]{article}
+
+\usepackage{amsmath, amsthm, amssymb}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{color}
+\usepackage{bussproofs}
+\usepackage[pdftex]{graphicx}
+\usepackage{fullpage}
+\usepackage{cmll}
+
+\newcommand{\interp}[1]{[\![ #1 ]\!]}
+\newcommand{\wproof}[1]{{\color{blue}\mathbb{W}}[#1]}
+\newcommand{\cproof}[1]{{\color{red}\mathbb{C}}[#1]}
+\newcommand{\inl}[1]{\mathtt{inl}\,#1}
+\newcommand{\inr}[1]{\mathtt{inr}\,#1}
+\newcommand{\prf}[3]{#1 \vdash #2 : #3}
+\newcommand{\tlam}[3]{\lambda #1 : #2.\, #3}
+\newcommand{\letin}[3]{\mathtt{let}\ #1\ := #2\ \mathtt{in}\ #3}
+\newcommand{\ifthen}[3]{\mathtt{if}\ #1\ \mathtt{then}\ #2\ \mathtt{else}\ #3}
+
+\begin{document}
+
+\section{Dialectica}
+
+Dialectica interpretation is defined by induction on the type of the formula.
+First, we fix a given type $R$, with an inhabitant $\maltese$. To any linear
+type $A$ we associate two intuitionistic types $\wproof{A}$ and $\cproof{A}$.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{c|c|c}
+& $\wproof{\cdot}$ & $\cproof{\cdot}$ \\\hline
+
+$1$ &
+$1$ &
+$R$ \\
+
+$A \otimes B$ &
+$\wproof{A} \times \wproof{B}$ &
+$(\wproof{A} \Rightarrow \cproof{B}) \times (\wproof{B} \Rightarrow \cproof{A})$
+\\
+
+$A \oplus B$ &
+$\wproof{A} + \wproof{B}$ &
+$\cproof{A} \times \cproof{B}$ \\
+
+$\oc{A}$ &
+$\wproof{A}$ &
+$\wproof{A} \Rightarrow \cproof{A}$ \\
+
+$A^\perp$ &
+$\cproof{A}$ &
+$\wproof{A}$ \\
+
+\end{tabular}
+\end{center}
+
+We also define an orthogonality on pseudoproofs: ${\perp_A} \subseteq \wproof{A}
+\times \cproof{A}$ by induction on $A$.
+
+\begin{center}
+\renewcommand{\arraystretch}{3}
+\begin{tabular}{ccc}
+
+\AxiomC{\strut$\neg (x \perp_A u)$}
+\UnaryInfC{\strut $u \perp_{A^\perp} x$}
+\DisplayProof &
+
+\AxiomC{\strut$\chi:R$}
+\UnaryInfC{\strut $() \perp_1 \chi$}
+\DisplayProof &
+
+\AxiomC{\strut$u \perp_A \psi v$}
+\AxiomC{\strut$v \perp_B \varphi u$}
+\BinaryInfC{\strut $(u, v) \perp_{A \otimes B} (\varphi, \psi)$}
+\DisplayProof \\
+
+\AxiomC{\strut$u \perp_A z u$}
+\UnaryInfC{\strut $u \perp_{\oc{A}} z$}
+\DisplayProof &
+
+\AxiomC{\strut$u \perp_A x$}
+\UnaryInfC{\strut $\inl u \perp_{A \oplus B} (x, y)$}
+\DisplayProof &
+
+\AxiomC{\strut$v \perp_A y$}
+\UnaryInfC{\strut $\inr v \perp_{A \oplus B} (x, y)$}
+\DisplayProof
+\end{tabular}
+\end{center}
+
+A term $u : \wproof{A}$ is said to be valid, noted $u \Vdash A$, whenever
+$$ \forall x : \cproof{A}.\, u \perp_A x$$
+
+For any $A$, $\wproof{A}$ is inhabited by a canonical term $\maltese_{A}$:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{c|c|c}
+& $\maltese_{-}$
+& $\maltese_{-^\perp}$ \\\hline
+
+$1$ & $()$ & $\maltese$ \\
+
+$A \otimes B$ &
+$ (\maltese_A, \maltese_B)$ &
+$\left\{
+  \begin{array}{c}
+  \lambda u : \wproof{A}.\,\maltese_{B^\perp} \\
+  \lambda v : \wproof{B}.\,\maltese_{A^\perp}
+  \end{array}
+\right\}$ \\
+
+$A \oplus B$ &
+$ \inl{(\maltese_A)}$ &
+$(\maltese_{A^\perp}, \maltese_{B^\perp})$\\
+
+$\oc{A}$ &
+$ \maltese_A$ &
+$\lambda u : \wproof{A}.\,\maltese_{A^\perp}$
+
+\end{tabular}
+\end{center}
+
+\section{Translating CBN $\lambda$-calculus}
+
+We note $t^+$ (resp. $t^-$) for the first (resp. second) component of the tensor
+counterproof (which is also the same component of the arrow proof).
+$$
+\renewcommand{\arraystretch}{1.5}
+\begin{array}{rcl}
+
+\interp{\prf{\oc\Gamma, x: \oc{A}}{x}{A}} & = &
+\left\{\begin{array}{l}
+  \tlam{(\gamma, u)}{\wproof{\oc\Gamma} \times \wproof{!A}}{u}\\
+  \tlam{x}{\cproof{!A}}{
+    \left\{\begin{array}{l}
+      \tlam{\gamma}{\wproof{\oc{\Gamma}}}{\tlam{u}{\wproof{A}}{x}} \\
+      \tlam{u}{\wproof{\oc{A}}}{\maltese_{\oc\Gamma}}
+    \end{array}\right\}
+
+  }
+\end{array}\right\} \\
+
+\interp{\prf{\oc\Gamma, y: \oc{B}}{x}{A}} & = &
+\left\{\begin{array}{l}
+  \tlam{(\gamma, v)}
+    {\wproof{\oc\Gamma} \times \wproof{!B}}
+      {\interp{\prf{\oc\Gamma}{x}{A}}^+(\gamma)}\\
+  \tlam{x}{\cproof{!A}}{
+    \left\{\begin{array}{l}
+      \tlam{\gamma}{\wproof{\oc{\Gamma}}}{\maltese_{\oc{B}}}\\
+      \tlam{v}{\wproof{\oc{B}}}
+        {\interp{\prf{\oc\Gamma}{x}{A}}^- (x)}
+    \end{array}\right\}
+
+  }
+\end{array}\right\} \\
+
+\interp{\prf{\oc\Gamma}{\tlam{x}{\oc{A}}{t}}{\oc{A} \multimap B}} & = &
+\left\{\begin{array}{l}
+  \tlam{\gamma}{\wproof{\oc{\Gamma}}}{
+    \left\{\begin{array}{l}
+      \tlam{u}{\wproof{\oc{A}}}{\interp{\prf{\oc\Gamma, x : A}{t}{B}}^+(\gamma,
+u)}\\
+      \tlam{y}{\cproof{B}}
+        {\left({\interp{\prf{\oc\Gamma, x : A}{t}{B}}^-(y)}\right)^+(\gamma)}
+    \end{array}\right\}} \\
+  \tlam{(u, y)}{\wproof{\oc{A}} \times \cproof{B}}
+    \left({\interp{\prf{\oc\Gamma, x : A}{t}{B}}^-(y)}\right)^-(u)
+\end{array}\right\} \\
+
+\interp{\prf{\oc\Gamma}{t u}{B}} & = &
+% \interp{\prf{\oc\Gamma}{t}{\oc{A} \multimap B}}
+% \interp{\prf{\oc\Gamma}{u}{A}}
+\left\{\begin{array}{l}
+  \tlam{\gamma}{\wproof{\oc{\Gamma}}}{
+    \left({\interp{\prf{\oc\Gamma}{t}{\oc{A} \multimap B}}^+(\gamma)}\right)^+
+    \left({\interp{\prf{\oc\Gamma}{u}{A}}^+(\gamma)}\right)
+  }\\
+  \tlam{y}{\cproof{B}}{
+    \tlam{\gamma}{\wproof{\oc\Gamma}}{\\\quad
+      \letin
+        {\mathbf{u} : \wproof{A}}
+        {\interp{\prf{\oc\Gamma}{u}{A}}^+(\gamma)}
+        {\\\quad
+      \letin
+        {\mathbf{t} : \wproof{\oc{A}\multimap B}}
+        {\interp{\prf{\oc\Gamma}{t}{\oc{A}\multimap B}}^+(\gamma)}
+        {\\\quad
+      \letin
+        {\kappa}
+        {{\interp{\prf{\oc\Gamma}{u}{A}}}^-(\mathbf{t}^-\ y\ \mathbf{u})}
+        {\\\quad
+          \ifthen{\gamma\perp_{\oc{\Gamma}}\kappa}{\kappa\ \gamma}{\\\qquad}}
+        }
+      }
+    }
+  }
+\end{array}\right\}
+
+\end{array}$$
+
+
+
+\end{document}
