@@ -19,9 +19,13 @@
 \newcommand{\letin}[3]{\mathtt{let}\ #1\ := #2\ \mathtt{in}\ #3}
 \newcommand{\ifthen}[3]{\mathtt{if}\ #1\ \mathtt{then}\ #2\ \mathtt{else}\ #3}
 
+\newtheorem{theorem}{Theorem}
+
 \begin{document}
 
-\section{Dialectica}
+\section{Original Dialectica}
+
+\subsection{Definition}
 
 Dialectica interpretation is defined by induction on the type of the formula.
 First, we fix a given type $R$, with an inhabitant $\maltese$. To any linear
@@ -123,10 +127,14 @@ $\lambda u : \wproof{A}.\,\maltese_{A^\perp}$
 \end{tabular}
 \end{center}
 
-\section{Translating CBN $\lambda$-calculus}
+\subsection{Translating CBN $\lambda$-calculus}
 
 We note $t^+$ (resp. $t^-$) for the first (resp. second) component of the tensor
 counterproof (which is also the same component of the arrow proof).
+
+To every simply-typed $\lambda$-term, we associate its Dialectica translation by
+induction on its typing derivation as follows:
+
 $$
 \renewcommand{\arraystretch}{1.5}
 \begin{array}{rcl}
@@ -202,6 +210,36 @@ u)}\\
 
 \end{array}$$
 
+\begin{theorem}[Soundness]
+For any $\prf{!\Gamma}{t}{A}$, $\interp{\prf{!\Gamma}{t}{A}} \Vdash \oc{\Gamma} 
+\multimap A$.
+\end{theorem}
 
+Let $\Gamma \equiv \Gamma_1, \hdots \Gamma_n$. If we stick to CBN 
+$\lambda$-calculus, we can rephrase the types of the morphisms as follows:
+
+$$
+\begin{array}{rcl}
+
+\wproof{\oc\Gamma\multimap A} & \equiv &
+(\wproof{\Gamma} \Rightarrow \wproof{A}) \times (\cproof{A} \Rightarrow 
+\cproof{\oc \Gamma}) \\
+
+& \cong &
+(\wproof{\Gamma} \Rightarrow
+\wproof{A}) \times (\cproof{A} \Rightarrow \Pi_i 
+(\wproof{\Gamma} \Rightarrow \cproof{\Gamma_i})) \\
+
+& \cong &
+\wproof{\Gamma} \Rightarrow \wproof{A} \times \Pi_i(\cproof{A} \Rightarrow 
+\cproof{\Gamma_i}) \\
+
+\end{array}
+$$
+
+That is, a translated morphism is isomorphic to a function waiting for its 
+closure arguments and returning the result of the computation, together with, 
+for every free variable $x : \Gamma_i$, a stack transformer $k_x : \cproof{A} 
+\Rightarrow \cproof{\Gamma_i}$.
 
 \end{document}
