@@ -18,6 +18,7 @@
 \newcommand{\tlam}[3]{\lambda #1 : #2.\, #3}
 \newcommand{\letin}[3]{\mathtt{let}\ #1\ := #2\ \mathtt{in}\ #3}
 \newcommand{\ifthen}[3]{\mathtt{if}\ #1\ \mathtt{then}\ #2\ \mathtt{else}\ #3}
+\newcommand{\process}[2]{\langle #1 \mid #2\rangle}
 
 \newtheorem{theorem}{Theorem}
 
@@ -93,6 +94,11 @@ We also define an orthogonality on pseudoproofs: ${\perp_A} \subseteq \wproof{A}
 \DisplayProof
 \end{tabular}
 \end{center}
+
+\begin{theorem}
+The orthogonality relation is decidable.
+\end{theorem}
+
 
 A term $u : \wproof{A}$ is said to be valid, noted $u \Vdash A$, whenever
 $$ \forall x : \cproof{A}.\, u \perp_A x$$
@@ -239,7 +245,70 @@ $$
 
 That is, a translated morphism is isomorphic to a function waiting for its 
 closure arguments and returning the result of the computation, together with, 
-for every free variable $x : \Gamma_i$, a stack transformer $k_x : \cproof{A} 
+for every free variable $x : \Gamma_i$, a stack transformer $t_x : \cproof{A} 
 \Rightarrow \cproof{\Gamma_i}$.
+
+What does this transformer do? Actually, it is quite simple: $t_x(\pi)$ 
+returns the first valid stack encountered by the variable $x$ while evaluating 
+$\langle t \mid \pi \rangle$. To make things clearer, please refer to the
+following section.
+
+\subsection{The abstract machine}
+
+This machine will be a plain Krivine abstract machine using explicit closures 
+instead of direct substitutions.
+
+$$\begin{array}{lccl}
+\text{Terms} & t &::=& x \mid \lambda x.t \mid t\, u\\
+\text{Stacks} & \pi &::=& \varepsilon \mid c \cdot \pi \\
+\text{Closures} & c &::=& (t, \sigma) \\
+\text{Environments} & \sigma &::=& \varnothing \mid \sigma + (x := c)
+\end{array}$$\bigskip
+
+The machine evaluates processes $\process{(t, \sigma)}{\pi}$ with the
+following reduction rules:
+
+$$\begin{array}{lccl}
+
+   
+\end{array}$$
+
+\section{The ListT variant}
+
+Actually, we can tweak the interpretation of $\oc A$ types to be a little more
+algebraic-friendly. This gives out a better model. For this to work, we first 
+need to define an inductive type:
+
+$$\begin{array}{rcl}
+\mathtt{rlist}\ I\ A & ::= &
+  \mathtt{Node} : I \Rightarrow \mathtt{rnode}\ I\ A\\
+\mathtt{rnode}\ I\ A & ::= &
+    \mathtt{Nil} \mid \mathtt{Cons} : A \times \mathtt{rlist}\ I\ A
+\end{array}
+$$
+
+This type is formally the result of combining the list monad transformer with
+the reader monad on type $I$, i.e. $\mathtt{rlist}\ I\ A \cong \mathtt{listT}\ 
+(\mathtt{reader}\ I)\ A$. We now change the counteproofs of bang types as:
+
+$$\cproof{\oc A} \equiv \mathtt{rlist}\ \wproof{A}\ \cproof{A}$$
+
+Orthogonality is also adapted:
+
+\begin{center}
+\renewcommand{\arraystretch}{3}
+\begin{tabular}{cc}
+
+\AxiomC{\strut$\mu u \rightarrow^* \mathtt{Nil}$}
+\UnaryInfC{\strut $u \perp_{\oc A} \mathtt{Node}\ \mu$}
+\DisplayProof &
+
+\AxiomC{\strut$\mu u \rightarrow^* \mathtt{Cons}\ (x, l)$}
+\AxiomC{\strut$u \perp_{A} x$}
+\AxiomC{\strut$u \perp_{\oc A} l$}
+\TrinaryInfC{\strut $u \perp_{\oc A} \mathtt{Node}\ \mu$}
+\DisplayProof
+\end{tabular}
+\end{center}
 
 \end{document}
