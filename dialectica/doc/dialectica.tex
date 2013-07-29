@@ -241,6 +241,11 @@ $$
 (\wproof{\Gamma} \Rightarrow \cproof{\Gamma_i})) \\
 
 & \cong &
+(\wproof{\Gamma} \Rightarrow
+\wproof{A}) \times (\Pi_i \wproof{\Gamma} \Rightarrow \cproof{A} \Rightarrow
+\cproof{\Gamma_i}) \\
+
+& \cong &
 \wproof{\Gamma} \Rightarrow \wproof{A} \times \Pi_i(\cproof{A} \Rightarrow 
 \cproof{\Gamma_i}) \\
 
@@ -308,16 +313,18 @@ Orthogonality is also adapted:
 \renewcommand{\arraystretch}{3}
 \begin{tabular}{cc}
 
-\AxiomC{\strut$\mu u \rightarrow^* \mathtt{Nil}$}
+\AxiomC{\strut$\mu\, u \rightarrow^* \mathtt{Nil}$}
 \UnaryInfC{\strut $u \perp_{\oc A} \mathtt{Node}\ \mu$}
 \DisplayProof &
 
-\AxiomC{\strut$\mu u \rightarrow^* \mathtt{Cons}\ (x, l)$}
+\AxiomC{\strut$\mu\, u \rightarrow^* \mathtt{Cons}\ (x, l)$}
 \AxiomC{\strut$u \perp_{A} x$}
 \AxiomC{\strut$u \perp_{\oc A} l$}
 \TrinaryInfC{\strut $u \perp_{\oc A} \mathtt{Node}\ \mu$}
 \DisplayProof
 \end{tabular}
 \end{center}
+
+This choice makes the $\oc$ monad better behaved.
 
 \end{document}

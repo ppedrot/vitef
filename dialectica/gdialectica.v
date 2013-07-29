@@ -65,6 +65,7 @@ Notation "x ＆ y" := (wth x y) (at level 74, left associativity).
 Notation "x ⊕ y" := (pls x y) (at level 76, left associativity).
 Notation "x ⊗ y" := (tns x y) (at level 76, left associativity).
 Notation "x ⊸ y" := (arr x y) (at level 78, right associativity).
+Notation "x ⇒ y" := (arr (bng x) y) (at level 78, right associativity).
 Notation "! x" := (bng x) (at level 1, format "! x").
 Notation "? x" := (whn x) (at level 1, format "? x").
 Notation "∀ x : t , p" :=  (@unv t (fun x => p)) (at level 80, x at level 99).
@@ -852,6 +853,30 @@ remember (n (u, u)) as N; destruct N as [|[xl xr] z]; simpl.
   - destruct z as [m]; simpl; f_equal; apply Hext; intros u'.
     remember (m (u, u')) as Z; destruct Z as [|X Z]; simpl.
 Admitted.
+
+Lemma markov {P} (f : ⊢ (∀ x : N, P x ⇒ [false]) ⇒ [false]) : ⊢ ∃ x : N, P x.
+Proof.
+intros P [fl fr]; simpl in *.
+
+Lemma markov {P} : ⊢ ¬ (∀ x : N, ¬ P x) ⊸ ∃ x : N, P x.
+Proof.
+intros P; split.
++ simpl; intros f.
+  set (u := Rlist.run f (fun x => Rlist.nil)).
+  destruct u as [|w _]; [|exact w].
+  admit.
++ simpl; intros f n.
+  exact (Rlist.cons (fun _ => f n) Rlist.nil).
+Defined.
+
+Lemma Valid_markov : forall P, Valid (@markov P).
+Proof.
+intros P; split; intros [w z]; unfold markov; apply rel_arr; simpl in *.
+intros H Hc; elim H.
+destruct w as [n]; simpl in *.
+rewrite rel_bng_simpl.
+match goal with [ |- rel_bng_node rel _ ?n ] => set (N := n) in * end.
+destruct n.
 
 Definition undual {A} : ⊢ ((A ⊸ [false]) ⊸ [false]) ⊸ A.
 Proof.
