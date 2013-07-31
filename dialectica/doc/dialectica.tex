@@ -139,6 +139,12 @@ $\lambda u : \wproof{A}.\,\maltese_{A^\perp}$
 We note $t^+$ (resp. $t^-$) for the first (resp. second) component of the tensor
 counterproof (which is also the same component of the arrow proof).
 
+This translation is based on the CBN interpretation of intuitionistic logic into
+linear logic:
+$$\interp{\Gamma \vdash A}_n =
+  \oc{\interp{\Gamma}}_n \vdash_{\mathrm{LL}} \interp{A}_n$$
+$$\interp{A \Rightarrow B}_n = \oc{\interp{A}}_n \multimap \interp{A}_n$$
+
 To every simply-typed $\lambda$-term, we associate its Dialectica translation by
 induction on its typing derivation as follows:
 
@@ -320,6 +326,12 @@ $$
 
 \end{array}$$
 
+\noindent where $\pi @ \rho = \left\{
+  \begin{array}{ll}
+    \rho & \text{if $\pi = \maltese$} \\
+    \pi & \text{otherwise}
+  \end{array}\right.$
+
 \end{proposition}
 
 
@@ -367,6 +379,94 @@ $$\begin{array}{lccl}
 \noindent where $\odot$ denotes the list concatenation, i.e.
 $$\epsilon \odot \pi = \pi$$
 $$(c \cdot \rho)\odot \pi = c \cdot (\rho \odot \pi)$$
+
+\subsection{Translating CBV $\lambda$-calculus}
+
+We use this time the boring translation.
+
+$$\interp{\Gamma \vdash A}_v = \oc\interp{\Gamma}_v \vdash \oc\interp{A}_v$$
+$$\interp{A \Rightarrow B}_v = \oc{\interp{A}_v} \multimap \oc{\interp{B}_v}$$
+
+Rewriting using the same isomorphisms as the call-by-name case, we obtain:
+$$\begin{array}{lcl}
+  \interp{\Gamma\vdash A}_v
+  &=& {\oc\interp{\Gamma}_v} \multimap \oc{\interp{A}_v}\\
+
+  &\cong& (\wproof{\oc\interp{\Gamma}_v} \Rightarrow \wproof{\oc\interp{A}_v})
+  \times (\cproof{\oc\interp{A}_v} \Rightarrow \cproof{\oc\interp{\Gamma}_v})\\
+
+  &\cong& (\wproof{\interp{\Gamma}_v} \Rightarrow \wproof{\interp{A}_v})
+  \times ((\wproof{\interp{A}_v} \Rightarrow \cproof{\interp{A}_v}) \Rightarrow
+  (\Pi_i (\wproof{\interp{\Gamma}_v}
+    \Rightarrow \cproof{\interp{\Gamma_i}_v}))\\
+
+  &\cong& \wproof{\interp{\Gamma}_v} \Rightarrow
+    \wproof{\interp{A}_v} \times \Pi_i
+    ((\wproof{\interp{A}_v} \Rightarrow \cproof{\interp{A}_v})
+      \Rightarrow \cproof{\interp{\Gamma_i}_v})
+\end{array}$$
+
+\newcommand{\kont}[1]{\mathfrak{K}[#1]}
+
+Now, instead of a stack transformer, each free variable $x_i : \Gamma_i$ comes
+with a continuation transformer $t_{x_i}$ which takes the current continuation 
+of type $(\wproof{\interp{A}_v} \Rightarrow \cproof{\interp{A}_v})$ and must 
+output a stack for $\Gamma_i$. Let us note $\kont{A}$ the type of such
+continuations, so that we have:
+
+$$
+  \interp{\Gamma\vdash A}_v \cong \wproof{\interp{\Gamma}_v} \Rightarrow
+    \wproof{\interp{A}_v} \times \Pi_i
+    (\kont{A} \Rightarrow \cproof{\interp{\Gamma_i}_v})\\
+$$
+
+Validity is adapted as $t \Vdash \Gamma \vdash A$ whenever for any $\vec{u} : 
+\wproof{\Gamma}$ and $k : \kont{A}$:
+$$
+  \left(\bigwedge_i u_i \perp_{\Gamma_i} t_{x_i}[\vec{x} := \vec{u}]\, k\right)
+    \Rightarrow t^\bullet[\vec{x} := \vec{u}] \perp_A k\,
+      (t^\bullet [\vec{x} := \vec{u}]) $$
+
+And the transformation is:
+
+$$
+\renewcommand{\arraystretch}{1.5}
+\begin{array}{lcl}
+\interp{\Gamma, x : A\vdash x : A}[\vec{x}, x] &=&
+  \left\{\begin{array}{lcl}
+    x^\bullet &:=& x \\
+    &:& \wproof{A}\\
+    x_{x_i} &:=& \lambda k.\, \maltese\\
+    &:& \kont{A} \Rightarrow \cproof{\Gamma_i}\\
+    x_{x} &:=& \lambda k.\, k\, x \\
+    &:& \kont{A} \Rightarrow \cproof{A}\\
+  \end{array}\right\}\\
+
+\interp{\Gamma \vdash \tlam{x}{A}{t} : A \Rightarrow B}[\vec{x}] &=&
+  \left\{\begin{array}{lcl}
+    (\lambda x.\,t)^{\bullet+} &:=& \lambda x.\, t^\bullet \\
+    &:& \wproof{A} \Rightarrow \wproof{B}\\
+    (\lambda x.\,t)^{\bullet-} &:=& \lambda kx.\, t_x\,k\\
+    &:& \mathfrak{K}[B]\Rightarrow\mathfrak{K}[A]\\
+    (\lambda x.\,t)_{x_i} &:=& \lambda k.\,
+    \mathtt{let}\ (x, k) := k\, (\lambda x.\, t)^\bullet\ 
+    \mathtt{in}\ t_{x_i}\, k
+    \\
+    &:& (\wproof{\oc{A} \multimap \oc{B}} \Rightarrow \wproof{A}\otimes \kont{B})
+      \Rightarrow \cproof{\Gamma_i}\\
+  \end{array}\right\}\\
+
+\interp{\Gamma \vdash t\, u : B}[\vec{x}] &=&
+  \left\{\begin{array}{lcl}
+    (t\, u)^{\bullet} &:=& t^{\bullet+}\, u^\bullet\\
+    &:& \wproof{B}\\
+    (t\, u)_{x_i} &:=& \lambda k.\, u_{x_i}(t^{\bullet-}\, k) @
+      (t_{x_i}\, (\lambda f.\,(f^+\, u^\bullet, f^-\, k)))\\
+    &:& \kont{B} \Rightarrow \cproof{\Gamma_i}\\
+  \end{array}\right\}\\
+
+\end{array}$$
+
 
 \section{The ListT variant}
 
