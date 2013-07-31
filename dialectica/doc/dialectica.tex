@@ -21,6 +21,7 @@
 \newcommand{\process}[2]{\langle #1 \mid #2\rangle}
 
 \newtheorem{theorem}{Theorem}
+\newtheorem{proposition}{Proposition}
 
 \begin{document}
 
@@ -225,7 +226,9 @@ For any $\prf{!\Gamma}{t}{A}$, $\interp{\prf{!\Gamma}{t}{A}} \Vdash \oc{\Gamma}
 \multimap A$.
 \end{theorem}
 
-Let $\Gamma \equiv \Gamma_1, \hdots \Gamma_n$. If we stick to CBN 
+\subsection{Rephrasing using nice isomorphisms}
+
+Let $\Gamma \equiv \Gamma_1, \hdots \Gamma_n$. If we stick to CBN
 $\lambda$-calculus, we can rephrase the types of the morphisms as follows:
 
 $$
@@ -253,13 +256,72 @@ $$
 $$
 
 That is, a translated morphism is isomorphic to a function waiting for its 
-closure arguments and returning the result of the computation, together with, 
-for every free variable $x : \Gamma_i$, a stack transformer $t_x : \cproof{A} 
-\Rightarrow \cproof{\Gamma_i}$.
+closure arguments and returning the result of the computation $t^\bullet$, 
+together with, for every free variable $x : \Gamma_i$, a stack transformer $t_x 
+: \cproof{A} \Rightarrow \cproof{\Gamma_i}$.
 
 What does this transformer do? Actually, it is quite simple: $t_x(\pi)$ 
-returns the first valid stack encountered by the variable $x$ while evaluating 
-$\langle t \mid \pi \rangle$, as explained in the following section.
+returns the first valid stack encountered by the variable $x$ while 
+evaluating $\langle t \mid \pi \rangle$, as explained in the following section. 
+For now, we explicit the isomorphic translation of CBN $\lambda$-calculus.
+
+\begin{proposition}
+We have $t \Vdash \oc{\Gamma} \multimap A$ whenever:
+$$\forall \vec{v} : \wproof{\vec{\Gamma}}.\, \forall \pi : \cproof{A}.\,
+\left(\bigwedge_i {v_i\perp_{\Gamma_i} t_{x_i}\, \vec{v}\, \pi}\right) 
+\Rightarrow t^\bullet \vec{v} \perp_A \pi
+$$
+\end{proposition}
+
+\begin{proposition}
+We explicit the previous translation using the isomorphisms. For the sake of 
+clarity, it works on open terms. Let $\Gamma \vdash t : A$ an open term with
+unbound variables $\{ x_i : \Gamma_i \mid i \le n \}$.
+
+\begin{itemize}
+  \item The $(-)^\bullet$ transformation associates to $t$ an open term 
+  $\vec{x} : \wproof{\Gamma} \vdash t^\bullet : \wproof{A}$.
+  \item The $(-)_{x_i}$ transformation associates to $t$ an open term $\vec{x} 
+:   \wproof{\Gamma} \vdash t_{x_i} : \cproof{A} \Rightarrow \cproof{\Gamma_i}$.
+\end{itemize}
+
+
+$$
+\renewcommand{\arraystretch}{1.5}
+\begin{array}{lcl}
+\interp{\Gamma, x : A\vdash x : A}[\vec{x}, x] &=&
+  \left\{\begin{array}{lcl}
+    x^\bullet &:=& x \\
+    &:& \wproof{A}\\
+    x_{x_i} &:=& \lambda \pi.\, \maltese\\
+    &:& \cproof{A} \Rightarrow \cproof{\Gamma_i}\\
+    x_{x} &:=& \lambda \pi.\, \pi\\
+    &:& \cproof{A} \Rightarrow \cproof{A}\\
+  \end{array}\right\}\\
+
+\interp{\Gamma \vdash \tlam{x}{A}{t} : A \Rightarrow B}[\vec{x}] &=&
+  \left\{\begin{array}{lcl}
+    (\lambda x.\,t)^{\bullet+} &:=& \lambda x.\, t^\bullet \\
+    &:& \wproof{A} \Rightarrow \wproof{B}\\
+    (\lambda x.\,t)^{\bullet-} &:=& \lambda \pi x.\, t_x\,\pi\\
+    &:& \cproof{B} \Rightarrow \wproof{A} \Rightarrow \cproof{A}\\
+    (\lambda x.\,t)_{x_i} &:=& \lambda (x, \pi).\, t_{x_i}\, \pi \\
+    &:& \wproof{A}\otimes\cproof{B} \Rightarrow \cproof{\Gamma_i}\\
+  \end{array}\right\}\\
+
+\interp{\Gamma \vdash t\, u : B}[\vec{x}] &=&
+  \left\{\begin{array}{lcl}
+    (t\, u)^{\bullet} &:=& t^{\bullet+}\, u^\bullet\\
+    &:& \wproof{B}\\
+    (t\, u)_{x_i} &:=& \lambda \pi.[t_{x_i}\, (u^\bullet, \pi)] @ [u_{x_i} 
+    (t^{\bullet-} \pi)] \\
+    &:& \cproof{B} \Rightarrow \cproof{\Gamma_i}\\
+  \end{array}\right\}\\
+
+\end{array}$$
+
+\end{proposition}
+
 
 \subsection{The abstract machine}
 
@@ -277,15 +339,34 @@ The machine evaluates processes $\process{(t, \sigma)}{\pi}$ with the
 following reduction rules:
 
 $$\begin{array}{rcl}
+\process{(x, \sigma + (x := c))}{\pi} & \rightarrow &
+  \process{c}{\pi}\\
+\process{(x, \sigma + (y := c))}{\pi} & \rightarrow &
+  \process{(x, \sigma)}{\pi}\\
 \process{(\lambda x.t, \sigma)}{c \cdot \pi} & \rightarrow &
   \process{(t, \sigma + (x := c)}{\pi}\\
 \process{(t\, u, \sigma)}{\pi} & \rightarrow &
   \process{(t, \sigma)}{(u, \sigma) \cdot \pi}\\
+&\hdots&
 \end{array}$$
 
 $$\begin{array}{lccl}
-\text{Terms} & t &::=& \hdots \mid \mathtt{set}\ x\ \mathtt{in}\ t\\
-\end{array}$$\bigskip
+\text{Terms} & t &::=&
+  \hdots \mid \mathtt{set}\ x\ \mathtt{in}\ t \\
+\text{Closures} & c &::=& \hdots \mid \maltese \\
+\end{array}$$
+
+\begin{center}
+\AxiomC{\strut$\process{(t,\sigma + (x := \maltese))}{\pi} \rightarrow^* 
+\process{(x, \sigma + (x := \maltese)}{\rho}$}
+\UnaryInfC{\strut$\process{(\mathtt{set}\ x\ \mathtt{in}\ t, \sigma)}{c \cdot 
+  \pi} \rightarrow \process{c}{\rho \odot \pi}$}
+\DisplayProof
+\end{center}
+
+\noindent where $\odot$ denotes the list concatenation, i.e.
+$$\epsilon \odot \pi = \pi$$
+$$(c \cdot \rho)\odot \pi = c \cdot (\rho \odot \pi)$$
 
 \section{The ListT variant}
 
@@ -325,6 +406,10 @@ Orthogonality is also adapted:
 \end{tabular}
 \end{center}
 
-This choice makes the $\oc$ monad better behaved.
+This choice makes the $\oc$ monad better behaved. In particular, we explicitely 
+get the back-and-forth mechanism used when accessing variables. Each time a
+variable has to be accessed, the $\mathtt{rlist}\ \wproof{A}\ \cproof{A}$ asks
+for a content and returns the current stack (the $\cproof{A}$ part) together
+with a continuation to the remaining of the computation.
 
 \end{document}
