@@ -382,8 +382,12 @@ $$(c \cdot \rho)\odot \pi = c \cdot (\rho \odot \pi)$$
 
 \subsection{Translating CBV $\lambda$-calculus}
 
-We use this time the boring translation.
+We use this time the boring translation. We make the difference between values 
+$\Gamma \vdash_\mathbb{V} v : A$ and computations $\Gamma \vdash t : A$ 
+explicit, as well as the injection from values to computations.
 
+$$\interp{\Gamma\vdash_{\mathbb{V}} A}_v = 
+\oc\interp{\Gamma}_v\vdash\interp{A}_v$$
 $$\interp{\Gamma \vdash A}_v = \oc\interp{\Gamma}_v \vdash \oc\interp{A}_v$$
 $$\interp{A \Rightarrow B}_v = \oc{\interp{A}_v} \multimap \oc{\interp{B}_v}$$
 
@@ -427,33 +431,49 @@ $$
     \Rightarrow t^\bullet[\vec{x} := \vec{u}] \perp_A k\,
       (t^\bullet [\vec{x} := \vec{u}]) $$
 
+Likewise we have $v \Vdash \Gamma \vdash_{\mathbb{V}} A$ whenever for any 
+$\vec{u} : \wproof{\Gamma}$ and $\pi : \cproof{A}$:
+
+$$
+  \left(\bigwedge_i u_i \perp_{\Gamma_i} v_{x_i}[\vec{x} := \vec{u}]\,\pi\right)
+    \Rightarrow v^\bullet[\vec{x} := \vec{u}] \perp_A \pi $$
+
 And the transformation is:
 
 $$
 \renewcommand{\arraystretch}{1.5}
 \begin{array}{lcl}
-\interp{\Gamma, x : A\vdash x : A}[\vec{x}, x] &=&
+\interp{\Gamma, x : A\vdash_{\mathbb{V}} x : A}[\vec{x}, x] &=&
   \left\{\begin{array}{lcl}
     x^\bullet &:=& x \\
     &:& \wproof{A}\\
     x_{x_i} &:=& \lambda k.\, \maltese\\
-    &:& \kont{A} \Rightarrow \cproof{\Gamma_i}\\
-    x_{x} &:=& \lambda k.\, k\, x \\
-    &:& \kont{A} \Rightarrow \cproof{A}\\
+    &:& \cproof{A} \Rightarrow \cproof{\Gamma_i}\\
+    x_{x} &:=& \lambda \pi.\, \pi \\
+    &:& \cproof{A} \Rightarrow \cproof{A}\\
   \end{array}\right\}\\
 
-\interp{\Gamma \vdash \tlam{x}{A}{t} : A \Rightarrow B}[\vec{x}] &=&
+\interp{\Gamma \vdash_{\mathbb{V}} \tlam{x}{A}{t} : A \Rightarrow B}[\vec{x}]&=&
   \left\{\begin{array}{lcl}
     (\lambda x.\,t)^{\bullet+} &:=& \lambda x.\, t^\bullet \\
     &:& \wproof{A} \Rightarrow \wproof{B}\\
     (\lambda x.\,t)^{\bullet-} &:=& \lambda kx.\, t_x\,k\\
     &:& \mathfrak{K}[B]\Rightarrow\mathfrak{K}[A]\\
-    (\lambda x.\,t)_{x_i} &:=& \lambda k.\,
-    \mathtt{let}\ (x, k) := k\, (\lambda x.\, t)^\bullet\ 
-    \mathtt{in}\ t_{x_i}\, k
-    \\
-    &:& (\wproof{\oc{A} \multimap \oc{B}} \Rightarrow \wproof{A}\otimes \kont{B})
+    (\lambda x.\,t)_{x_i} &:=& \lambda (x, k).\, t_{x_i}\, k\\
+    &:& \wproof{A}\otimes \kont{B}
       \Rightarrow \cproof{\Gamma_i}\\
+  \end{array}\right\}\\
+\end{array}$$
+
+$$
+\renewcommand{\arraystretch}{1.5}
+\begin{array}{lcl}
+\interp{\Gamma \vdash v : A}[\vec{x}] &=&
+  \left\{\begin{array}{lcl}
+    {[v]}^\bullet &:=& v^\bullet \\
+    &:& \wproof{A}\\
+    {[v]}_{x} &:=& \lambda k.\, v_x\,(k\, v^\bullet) \\
+    &:& \kont{A} \Rightarrow \cproof{\Gamma_i}\\
   \end{array}\right\}\\
 
 \interp{\Gamma \vdash t\, u : B}[\vec{x}] &=&
@@ -466,6 +486,12 @@ $$
   \end{array}\right\}\\
 
 \end{array}$$
+
+\begin{theorem}[Soundness]
+
+If $\Gamma \vdash t : A$ then $t \Vdash \Gamma \vdash A$.
+
+\end{theorem}
 
 
 \section{The ListT variant}
