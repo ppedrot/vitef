@@ -334,6 +334,8 @@ $$
 
 \end{proposition}
 
+The important thing here is to have the following property: if $t \perp_A \pi @
+\rho$, then $t \perp_A \pi$ and $t \perp_A \rho$.
 
 \subsection{The abstract machine}
 
@@ -481,7 +483,7 @@ $$
     (t\, u)^{\bullet} &:=& t^{\bullet+}\, u^\bullet\\
     &:& \wproof{B}\\
     (t\, u)_{x_i} &:=& \lambda k.\, u_{x_i}(t^{\bullet-}\, k) @
-      (t_{x_i}\, (\lambda f.\,(f^+\, u^\bullet, f^-\, k)))\\
+      (t_{x_i}\, (\lambda f.\,(u^\bullet, k)))\\
     &:& \kont{B} \Rightarrow \cproof{\Gamma_i}\\
   \end{array}\right\}\\
 
@@ -493,6 +495,11 @@ If $\Gamma \vdash t : A$ then $t \Vdash \Gamma \vdash A$.
 
 \end{theorem}
 
+If we focus a bit on the translation of the arrow, we may remark that:
+$$\interp{A\Rightarrow B}_v \cong
+  \interp{A}_v \Rightarrow M_{A, B} \interp{B}_v$$
+\noindent where
+$$M_{A, B}(X) = X \otimes (X \Rightarrow \cproof{B}) \Rightarrow \cproof{A}$$
 
 \section{The ListT variant}
 
