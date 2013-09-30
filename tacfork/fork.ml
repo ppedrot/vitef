@@ -31,8 +31,10 @@ let abstract id tac gl =
     let concl = it_mkNamedProd_or_LetIn (pf_concl gl) sign in
     let concl = flush_and_check_evars (project gl) concl in
     let rtac = tclCOMPLETE (tclTHEN (tclDO (List.length sign) intro) tac) in
-    let const = Pfedit.build_constant_by_tactic id secsign concl rtac in
-    Some const.const_entry_body
+    let ce = Pfedit.build_constant_by_tactic id secsign concl rtac in
+    let ce = Term_typing.handle_side_effects (pf_env gl) ce in
+    let (ans, _) = Future.force ce.const_entry_body in
+    Some ans
   with _ -> None
 
 let fork (f : unit -> 'a) =
@@ -115,7 +117,7 @@ let fork_tac init args gl =
     List.map Tacinterp.eval_tactic tacs
   in
   let process gl tac = (); fun () ->
-    let gl = { Evd.it = gl; sigma = evd } in
+    let gl = { Evd.it = gl; sigma = evd; eff = Declareops.no_seff; } in
     let id = Names.Id.of_string "__fork__" in
     abstract id tac gl
   in
@@ -132,10 +134,10 @@ let fork_tac init args gl =
     (gl :: gls, evd)
   | Some c ->
     (** [tac] succeed, we remove the goal and recoved the modified evar map. *)
-    let goal = { Evd.it = gl; Evd.sigma = evd; } in
+    let goal = { Evd.it = gl; Evd.sigma = evd; Evd.eff = Declareops.no_seff; } in
     let ans = exact_no_check c goal in
     let () = assert (CList.is_empty ans.Evd.it) in
     gls, ans.Evd.sigma
   in
   let (gls, evd) = List.fold_right2 fold gls data ([], evd) in
-  { Evd.it = gls; Evd.sigma = evd }
+  { Evd.it = gls; Evd.sigma = evd; Evd.eff = state.Evd.eff; }
