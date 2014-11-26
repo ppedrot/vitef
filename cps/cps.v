@@ -85,12 +85,6 @@ intros Γ A B C p q R γ k.
 refine (p _ γ (fun π => q _ (fst π, (snd π, γ)) k)).
 Defined.
 
-Fixpoint rseq (Γ : list type) A :=
-match Γ with
-| nil => A
-| cons B Γ => arr B (rseq Γ A)
-end.
-
 Lemma pls_introl : forall Γ A B, seq Γ A -> seq Γ (pls A B).
 Proof.
 intros Γ A B p R γ k.
