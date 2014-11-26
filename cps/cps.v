@@ -1,6 +1,332 @@
 Set Universe Polymorphism.
 
-Module M.
+Module CBN.
+
+Inductive type :=
+| atm : Type -> type
+| arr : type -> type -> type
+| one : type
+| tns : type -> type -> type
+| nul : type
+| pls : type -> type -> type
+.
+
+Definition ℜ (X : Type) := X.
+
+Fixpoint eval (t : type) R : Type :=
+match t with
+| atm T => T -> ℜ R
+| arr t u => (forall R : Type, eval t R -> ℜ R) * eval u R
+| one => ℜ R
+| tns t u => ((forall R : Type, eval t R -> ℜ R) * (forall R : Type, eval u R -> ℜ R)) -> ℜ R
+| nul => False -> ℜ R
+| pls t u => ((forall R : Type, eval t R -> ℜ R) + (forall R : Type, eval u R -> ℜ R)) -> ℜ R
+end.
+
+Notation "[ A ⊢ R ]" := (eval A R).
+
+Fixpoint eval_env (Γ : list type) : Type :=
+match Γ with
+| nil => unit
+| cons A Γ => prod (forall R, eval A R -> ℜ R) (eval_env Γ)
+end.
+
+Definition seq Γ A := forall R, eval_env Γ -> eval A R -> ℜ R.
+
+Lemma axiom : forall Γ A, seq (cons A Γ) A.
+Proof.
+intros Γ A R [x γ] k; unfold seq; cbn.
+exact (x R k).
+Defined.
+
+Lemma wkn : forall Γ A B, seq Γ B -> seq (cons A Γ) B.
+Proof.
+intros Γ A B p R [_ γ] k; unfold seq; cbn.
+refine (p _ γ k).
+Defined.
+
+Lemma arr_intro : forall Γ A B, seq (cons A Γ) B -> seq Γ (arr A B).
+Proof.
+intros Γ A B p R γ [x k].
+refine (p _ (x, γ) k).
+Defined.
+
+Lemma arr_elim : forall Γ A B, seq Γ (arr A B) -> seq Γ A -> seq Γ B.
+Proof.
+intros Γ A B p q R γ k.
+refine (p _ γ ((fun R => q R γ), k)).
+Defined.
+
+Lemma tns_intro : forall Γ A B, seq Γ A -> seq Γ B -> seq Γ (tns A B).
+Proof.
+intros Γ A B p q R γ k.
+refine (k ((fun R => p R γ), (fun R => q R γ))).
+Defined.
+
+Lemma tns_elim : forall Γ A B C, seq Γ (tns A B) -> seq (cons A (cons B Γ)) C -> seq Γ C.
+Proof.
+intros Γ A B C p q R γ k.
+refine (p _ γ (fun π => q _ (fst π, (snd π, γ)) k)).
+Defined.
+
+Fixpoint rseq (Γ : list type) A :=
+match Γ with
+| nil => A
+| cons B Γ => arr B (rseq Γ A)
+end.
+
+Lemma pls_introl : forall Γ A B, seq Γ A -> seq Γ (pls A B).
+Proof.
+intros Γ A B p R γ k.
+refine (k (inl (fun R => p R γ))).
+Defined.
+
+Lemma pls_intror : forall Γ A B, seq Γ B -> seq Γ (pls A B).
+Proof.
+intros Γ A B p R γ k.
+refine (k (inr (fun R => p R γ))).
+Defined.
+
+Lemma pls_elim : forall Γ A B C, seq Γ (pls A B) -> seq (cons A Γ) C -> seq (cons B Γ) C -> seq Γ C.
+Proof.
+intros Γ A B C p q r R γ k.
+refine (p _ γ (fun π => match π with inl kl => q _ (kl, γ) k | inr kr => r _ (kr, γ) k end)).
+Defined.
+
+Lemma one_intro : forall Γ, seq Γ one.
+Proof.
+intros Γ R γ k; exact k.
+Defined.
+
+Lemma nul_elim : forall Γ A, seq Γ nul -> seq Γ A.
+Proof.
+intros Γ A p R γ k.
+refine (p _ γ (fun π => match π with end)).
+Defined.
+
+Fixpoint pure (t : type) : Type :=
+match t with
+| atm A => A
+| arr t u => (pure t) -> (pure u)
+| one => unit
+| tns t u => prod (pure t) (pure u)
+| nul => False
+| pls t u => sum (pure t) (pure u)
+end.
+
+Record run (t : type) : Type := {
+  reflect : (forall R, eval t R -> ℜ R) -> pure t;
+  reify : pure t -> (forall R, eval t R -> ℜ R)
+}.
+
+Lemma runner : forall t, run t.
+Proof.
+induction t; split; cbn.
++ intros k; refine (k _ (fun x => x)).
++ intros x R k; refine (k x).
++ destruct IHt2 as [IHt2 _], IHt1 as [_ IHt1].
+  intros k x; apply IHt2.
+  intros R p; apply k; split.
+  ++ apply IHt1, x.
+  ++ apply p.
++ destruct IHt2 as [_ IHt2], IHt1 as [IHt1 _].
+  intros k R [x p].
+  refine (IHt2 _ _ p).
+  apply k, IHt1, x.
++ intros k; refine (k _ tt).
++ intros [] R x; exact x.
++ destruct IHt2 as [IHt2 _], IHt1 as [IHt1 _].
+  intros k; apply k.
+  intros [pl pr]; split.
+  ++ apply IHt1, pl.
+  ++ apply IHt2, pr.
++ destruct IHt2 as [_ IHt2], IHt1 as [_ IHt1].
+  intros [x y] R p.
+  apply (p (IHt1 x, IHt2 y)).
++ intros k; refine (k _ (False_rect _)).
++ intros [].
++ destruct IHt2 as [IHt2 _], IHt1 as [IHt1 _].
+  intros k; apply k.
+  intros [pl|pr].
+  ++ left; apply IHt1, pl.
+  ++ right; apply IHt2, pr.
++ destruct IHt2 as [_ IHt2], IHt1 as [_ IHt1].
+  intros [x|y].
+  ++ intros R k; apply k; left; apply (IHt1 x).
+  ++ intros R k; apply k; right; apply (IHt2 y).
+Defined.
+
+End CBN.
+
+Module CBV.
+
+Inductive type :=
+| atm : Type -> type
+| arr : type -> type -> type
+| one : type
+| tns : type -> type -> type
+(*
+| nul : type
+| pls : type -> type -> type
+*)
+.
+
+Definition ℜ (X : Type) := X.
+
+Fixpoint evalv (t : type) : Type :=
+match t with
+| atm T => T
+| arr t u => forall R : Type, (evalv t) * (evalv u -> ℜ R) -> ℜ R
+| one => unit
+| tns t u => (evalv t) * (evalv u)
+(*| nul => False -> ℜ R
+| pls t u => ((forall R : Type, eval t R -> ℜ R) + (forall R : Type, eval u R -> ℜ R)) -> ℜ R
+*)
+end.
+
+Definition eval t R := evalv t -> ℜ R.
+
+Notation "[ A ⊢ R ]" := (eval A R).
+
+Fixpoint eval_env (Γ : list type) : Type :=
+match Γ with
+| nil => unit
+| cons A Γ => prod (evalv A) (eval_env Γ)
+end.
+
+Definition seqv Γ A := eval_env Γ -> evalv A.
+Definition seq Γ A := forall R, eval_env Γ -> eval A R -> ℜ R.
+
+Lemma axiom : forall Γ A, seqv (cons A Γ) A.
+Proof.
+intros Γ A [x γ]; exact x.
+Defined.
+
+Lemma arr_intro : forall Γ A B, seq (cons A Γ) B -> seqv Γ (arr A B).
+Proof.
+intros Γ A B p γ R [x k].
+refine (p _ (x, γ) k).
+Defined.
+
+Lemma arr_elim : forall Γ A B, seq Γ (arr A B) -> seq Γ A -> seq Γ B.
+Proof.
+intros Γ A B p q R γ k.
+refine (p _ γ (fun f => f _ (q _ γ (fun x => x), k))).
+Defined.
+
+Lemma return_val : forall Γ A, seqv Γ A -> seq Γ A.
+Proof.
+intros Γ A p R γ k.
+refine (k (p γ)).
+Defined.
+
+Lemma wkn : forall Γ A B, seq Γ B -> seq (cons A Γ) B.
+Proof.
+intros Γ A B p R [_ γ] k; unfold seq; cbn.
+refine (p _ γ k).
+Defined.
+
+Lemma tns_intro : forall Γ A B, seq Γ A -> seq Γ B -> seq Γ (tns A B).
+Proof.
+intros Γ A B p q R γ k.
+refine (k (p _ γ (fun x => x), q _ γ (fun x => x))).
+Defined.
+
+Lemma tns_elim : forall Γ A B C, seq Γ (tns A B) -> seq (cons A (cons B Γ)) C -> seq Γ C.
+Proof.
+intros Γ A B C p q R γ k.
+refine (p _ γ (fun π => q _ (fst π, (snd π, γ)) k)).
+Defined.
+
+Fixpoint rseq (Γ : list type) A :=
+match Γ with
+| nil => A
+| cons B Γ => arr B (rseq Γ A)
+end.
+
+Lemma pls_introl : forall Γ A B, seq Γ A -> seq Γ (pls A B).
+Proof.
+intros Γ A B p R γ k.
+refine (k (inl (fun R => p R γ))).
+Defined.
+
+Lemma pls_intror : forall Γ A B, seq Γ B -> seq Γ (pls A B).
+Proof.
+intros Γ A B p R γ k.
+refine (k (inr (fun R => p R γ))).
+Defined.
+
+Lemma pls_elim : forall Γ A B C, seq Γ (pls A B) -> seq (cons A Γ) C -> seq (cons B Γ) C -> seq Γ C.
+Proof.
+intros Γ A B C p q r R γ k.
+refine (p _ γ (fun π => match π with inl kl => q _ (kl, γ) k | inr kr => r _ (kr, γ) k end)).
+Defined.
+
+Lemma one_intro : forall Γ, seq Γ one.
+Proof.
+intros Γ R γ k; exact k.
+Defined.
+
+Lemma nul_elim : forall Γ A, seq Γ nul -> seq Γ A.
+Proof.
+intros Γ A p R γ k.
+refine (p _ γ (fun π => match π with end)).
+Defined.
+
+Fixpoint pure (t : type) : Type :=
+match t with
+| atm A => A
+| arr t u => (pure t) -> (pure u)
+| one => unit
+| tns t u => prod (pure t) (pure u)
+| nul => False
+| pls t u => sum (pure t) (pure u)
+end.
+
+Record run (t : type) : Type := {
+  reflect : (forall R, eval t R -> ℜ R) -> pure t;
+  reify : pure t -> (forall R, eval t R -> ℜ R)
+}.
+
+Lemma runner : forall t, run t.
+Proof.
+induction t; split; cbn.
++ intros k; refine (k _ (fun x => x)).
++ intros x R k; refine (k x).
++ destruct IHt2 as [IHt2 _], IHt1 as [_ IHt1].
+  intros k x; apply IHt2.
+  intros R p; apply k; split.
+  ++ apply IHt1, x.
+  ++ apply p.
++ destruct IHt2 as [_ IHt2], IHt1 as [IHt1 _].
+  intros k R [x p].
+  refine (IHt2 _ _ p).
+  apply k, IHt1, x.
++ intros k; refine (k _ tt).
++ intros [] R x; exact x.
++ destruct IHt2 as [IHt2 _], IHt1 as [IHt1 _].
+  intros k; apply k.
+  intros [pl pr]; split.
+  ++ apply IHt1, pl.
+  ++ apply IHt2, pr.
++ destruct IHt2 as [_ IHt2], IHt1 as [_ IHt1].
+  intros [x y] R p.
+  apply (p (IHt1 x, IHt2 y)).
++ intros k; refine (k _ (False_rect _)).
++ intros [].
++ destruct IHt2 as [IHt2 _], IHt1 as [IHt1 _].
+  intros k; apply k.
+  intros [pl|pr].
+  ++ left; apply IHt1, pl.
+  ++ right; apply IHt2, pr.
++ destruct IHt2 as [_ IHt2], IHt1 as [_ IHt1].
+  intros [x|y].
+  ++ intros R k; apply k; left; apply (IHt1 x).
+  ++ intros R k; apply k; right; apply (IHt2 y).
+Defined.
+
+End M.
+
 
 Inductive type :=
 | atm : Type -> type
