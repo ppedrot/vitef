@@ -1,6 +1,6 @@
 Set Universe Polymorphism.
 
-Module CBN.
+Module type.
 
 Inductive type :=
 | atm : Type -> type
@@ -10,6 +10,22 @@ Inductive type :=
 | nul : type
 | pls : type -> type -> type
 .
+
+Fixpoint pure (t : type) : Type :=
+match t with
+| atm A => A
+| arr t u => (pure t) -> (pure u)
+| one => unit
+| tns t u => prod (pure t) (pure u)
+| nul => False
+| pls t u => sum (pure t) (pure u)
+end.
+
+End type.
+
+Module CBN.
+
+Import type.
 
 Definition ℜ (X : Type) := X.
 
@@ -104,15 +120,13 @@ intros Γ A p R γ k.
 refine (p _ γ (fun π => match π with end)).
 Defined.
 
-Fixpoint pure (t : type) : Type :=
-match t with
-| atm A => A
-| arr t u => (pure t) -> (pure u)
-| one => unit
-| tns t u => prod (pure t) (pure u)
-| nul => False
-| pls t u => sum (pure t) (pure u)
-end.
+(** Interesting feature *)
+Lemma iota_sum_l : forall Γ A B C p q r,
+  pls_elim Γ A B C (pls_introl _ _ _ p) q r = arr_elim _ _ _ (arr_intro _ _ _ q) p.
+Proof.
+intros Γ A B C p q r.
+reflexivity.
+Qed.
 
 Record run (t : type) : Type := {
   reflect : (forall R, eval t R -> ℜ R) -> pure t;
@@ -160,14 +174,7 @@ End CBN.
 
 Module CBV.
 
-Inductive type :=
-| atm : Type -> type
-| arr : type -> type -> type
-| one : type
-| tns : type -> type -> type
-| nul : type
-| pls : type -> type -> type
-.
+Import type.
 
 Definition ℜ (X : Type) := X.
 
@@ -277,16 +284,6 @@ Proof.
 intros Γ A B C p q r.
 reflexivity.
 Qed.
-
-Fixpoint pure (t : type) : Type :=
-match t with
-| atm A => A
-| arr t u => (pure t) -> (pure u)
-| one => unit
-| tns t u => prod (pure t) (pure u)
-| nul => False
-| pls t u => sum (pure t) (pure u)
-end.
 
 Record run (t : type) : Type := {
   reflect : (forall R : Type, eval t R -> ℜ R) -> pure t;
