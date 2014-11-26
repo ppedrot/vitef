@@ -238,12 +238,18 @@ intros Γ A B C p q R γ k.
 refine (p _ γ (fun π => q _ (fst π, (snd π, γ)) k)).
 Defined.
 
-Fixpoint rseq (Γ : list type) A :=
-match Γ with
-| nil => A
-| cons B Γ => arr B (rseq Γ A)
-end.
+Lemma one_intro : forall Γ, seqv Γ one.
+Proof.
+intros Γ γ; refine tt.
+Defined.
 
+Lemma one_elim : forall Γ A, seq Γ one -> seq Γ A -> seq Γ A.
+Proof.
+intros Γ A p q R γ k.
+refine (p _ γ (fun _ => q _ γ k)).
+Defined.
+
+(*
 Lemma pls_introl : forall Γ A B, seq Γ A -> seq Γ (pls A B).
 Proof.
 intros Γ A B p R γ k.
@@ -272,47 +278,52 @@ Proof.
 intros Γ A p R γ k.
 refine (p _ γ (fun π => match π with end)).
 Defined.
-
+*)
 Fixpoint pure (t : type) : Type :=
 match t with
 | atm A => A
 | arr t u => (pure t) -> (pure u)
 | one => unit
 | tns t u => prod (pure t) (pure u)
+(*
 | nul => False
 | pls t u => sum (pure t) (pure u)
+*)
 end.
 
 Record run (t : type) : Type := {
-  reflect : (forall R, eval t R -> ℜ R) -> pure t;
-  reify : pure t -> (forall R, eval t R -> ℜ R)
+  reflect : (forall R : Type, eval t R -> ℜ R) -> pure t;
+  reify : pure t -> evalv t
 }.
 
 Lemma runner : forall t, run t.
 Proof.
 induction t; split; cbn.
 + intros k; refine (k _ (fun x => x)).
-+ intros x R k; refine (k x).
++ refine (fun x => x).
+
 + destruct IHt2 as [IHt2 _], IHt1 as [_ IHt1].
-  intros k x; apply IHt2.
-  intros R p; apply k; split.
-  ++ apply IHt1, x.
-  ++ apply p.
+  intros k x.
+  refine (k _ (fun f => _)).
+  refine (let r := f _ (IHt1 x, (fun f => IHt2 (fun _ k => k f))) in _); shelve_unifiable.
+  apply r.
 + destruct IHt2 as [_ IHt2], IHt1 as [IHt1 _].
-  intros k R [x p].
-  refine (IHt2 _ _ p).
-  apply k, IHt1, x.
-+ intros k; refine (k _ tt).
-+ intros [] R x; exact x.
+  intros f R [x p].
+  refine (p (IHt2 (f (IHt1 (fun _ k => k x))))).
+
++ intros k; refine (k _ (fun x => x)).
++ intros []; exact tt.
+
 + destruct IHt2 as [IHt2 _], IHt1 as [IHt1 _].
   intros k; apply k.
   intros [pl pr]; split.
-  ++ apply IHt1, pl.
-  ++ apply IHt2, pr.
+  ++ refine (IHt1 (fun _ k => k pl)).
+  ++ refine (IHt2 (fun _ k => k pr)).
 + destruct IHt2 as [_ IHt2], IHt1 as [_ IHt1].
-  intros [x y] R p.
-  apply (p (IHt1 x, IHt2 y)).
-+ intros k; refine (k _ (False_rect _)).
+  intros [x y].
+  apply ((IHt1 x, IHt2 y)).
+(* + intros k; refine (k _ (False_rect _)).
+
 + intros [].
 + destruct IHt2 as [IHt2 _], IHt1 as [IHt1 _].
   intros k; apply k.
@@ -323,6 +334,7 @@ induction t; split; cbn.
   intros [x|y].
   ++ intros R k; apply k; left; apply (IHt1 x).
   ++ intros R k; apply k; right; apply (IHt2 y).
+*)
 Defined.
 
 End M.
