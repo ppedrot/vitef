@@ -165,10 +165,8 @@ Inductive type :=
 | arr : type -> type -> type
 | one : type
 | tns : type -> type -> type
-(*
 | nul : type
 | pls : type -> type -> type
-*)
 .
 
 Definition ℜ (X : Type) := X.
@@ -179,9 +177,8 @@ match t with
 | arr t u => forall R : Type, (evalv t) * (evalv u -> ℜ R) -> ℜ R
 | one => unit
 | tns t u => (evalv t) * (evalv u)
-(*| nul => False -> ℜ R
-| pls t u => ((forall R : Type, eval t R -> ℜ R) + (forall R : Type, eval u R -> ℜ R)) -> ℜ R
-*)
+| nul => False
+| pls t u => evalv t + evalv u
 end.
 
 Definition eval t R := evalv t -> ℜ R.
@@ -249,11 +246,10 @@ intros Γ A p q R γ k.
 refine (p _ γ (fun _ => q _ γ k)).
 Defined.
 
-(*
 Lemma pls_introl : forall Γ A B, seq Γ A -> seq Γ (pls A B).
 Proof.
 intros Γ A B p R γ k.
-refine (k (inl (fun R => p R γ))).
+refine (k (inl (p _ γ (fun x => x)))).
 Defined.
 
 Lemma pls_intror : forall Γ A B, seq Γ B -> seq Γ (pls A B).
