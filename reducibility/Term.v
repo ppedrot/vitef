@@ -3,7 +3,11 @@ Require Import Omega.
 Inductive term :=
 | var : nat -> term
 | app : term -> term -> term
-| lam : term -> term.
+| lam : term -> term
+| lft : term -> term
+| rgt : term -> term
+| cse : term -> term -> term -> term
+.
 
 Inductive lift :=
 | ELID : lift
@@ -59,6 +63,9 @@ match t with
 | var n => var (reloc n el)
 | app t1 t2 => app (lift_term el t1) (lift_term el t2)
 | lam t => lam (lift_term (ELLFT el) t)
+| lft t => lft (lift_term el t)
+| rgt t => rgt (lift_term el t)
+| cse t u1 u2 => cse (lift_term el t) (lift_term (ELLFT el) u1) (lift_term (ELLFT el) u2)
 end.
 
 Fixpoint lift_compose (e1 e2 : lift) {struct e1} : lift :=
@@ -81,6 +88,8 @@ induction t; intros m; cbn; try (f_equal; intuition).
   - destruct n as [|n]; [reflexivity|].
     f_equal; apply IHm.
 + refine (IHt (S m)).
++ refine (IHt2 (S m)).
++ refine (IHt3 (S m)).
 Qed.
 
 Lemma lift_term_ELID : forall t, lift_term ELID t = t.
@@ -161,6 +170,9 @@ match t with
 | var n => expand_term s n
 | app t1 t2 => app (subs_term s t1) (subs_term s t2)
 | lam t => lam (subs_term (LIFT s) t)
+| lft t => lft (subs_term s t)
+| rgt t => rgt (subs_term s t)
+| cse t u1 u2 => cse (subs_term s t) (subs_term (LIFT s) u1) (subs_term (LIFT s) u2)
 end.
 
 Lemma subs_term_LIFTn : forall t n, subs_term (LIFTn n ESID) t = t.
@@ -172,9 +184,14 @@ induction t; intros m; cbn.
     specialize (IHm n).
     unfold expand_term in IHm.
     destruct (expand (LIFTn m ESID) n) as [[v k]|p]; [|congruence].
-    destruct v as [p| |]; cbn in *; congruence.
+    destruct v as [p| | | | | ]; cbn in *; congruence.
 + f_equal; intuition.
 + f_equal; apply (IHt (S m)).
++ f_equal; intuition.
++ f_equal; intuition.
++ f_equal; intuition.
+  - apply (IHt2 (S m)).
+  - apply (IHt3 (S m)).
 Qed.
 
 Lemma subs_term_ESID : forall t, subs_term ESID t = t.
@@ -207,6 +224,11 @@ intros e t; revert e; induction t; intros e; cbn.
     destruct v; cbn in *; congruence.
 + f_equal; intuition.
 + f_equal; apply (IHt (ELLFT e)).
++ f_equal; intuition.
++ f_equal; intuition.
++ f_equal; intuition.
+  - apply (IHt2 (ELLFT e)).
+  - apply (IHt3 (ELLFT e)).
 Qed.
 
 Lemma subs_lift_compose : forall e1 e2,
@@ -239,6 +261,11 @@ intros e1 e2 t; revert e1 e2; induction t; intros e1 e2; cbn.
     * destruct n; [reflexivity|f_equal]; apply IHe1.
 + f_equal; intuition.
 + f_equal; rewrite <- IHt; reflexivity.
++ f_equal; intuition.
++ f_equal; intuition.
++ f_equal; intuition.
+  - rewrite <- IHt2; reflexivity.
+  - rewrite <- IHt3; reflexivity.
 Qed.
 
 Lemma expand_term_SHFT : forall σ n,
@@ -271,6 +298,11 @@ induction t; intros σ x m; cbn.
 + f_equal; intuition.
 + f_equal.
   apply (IHt _ _ (S m)).
++ f_equal; intuition.
++ f_equal; intuition.
++ f_equal; intuition.
+  - apply (IHt2 _ _ (S m)).
+  - apply (IHt3 _ _ (S m)).
 Qed.
 
 Lemma subs_term_CONS_SHFT : forall σ x t,
@@ -290,6 +322,11 @@ intros σ t; revert σ; induction t; intros σ m; cbn.
     clear; induction m as [|m]; cbn; congruence.
 + f_equal; intuition.
 + f_equal; apply (IHt _ (S m)).
++ f_equal; intuition.
++ f_equal; intuition.
++ f_equal; intuition.
+  - apply (IHt2 _ (S m)).
+  - apply (IHt3 _ (S m)).
 Qed.
 
 Lemma subs_term_SHFT_SHFT : forall σ t,
@@ -311,6 +348,11 @@ intros σ t; revert σ; induction t; intros σ m; cbn.
     clear; induction m as [|m]; cbn; congruence.
 + f_equal; intuition.
 + f_equal; apply (IHt _ (S m)).
++ f_equal; intuition.
++ f_equal; intuition.
++ f_equal; intuition.
+  - apply (IHt2 _ (S m)).
+  - apply (IHt3 _ (S m)).
 Qed.
 
 Lemma subs_term_LIFT_SHFT : forall σ t,
@@ -350,4 +392,7 @@ intros σ1 σ2 t; revert σ1 σ2; induction t; intros σ1 σ2; cbn in *.
 + rewrite IHt1, IHt2; reflexivity.
 + f_equal.
   rewrite <- IHt; reflexivity.
++ f_equal; intuition.
++ f_equal; intuition.
++ rewrite <- IHt1, <- IHt2, <- IHt3; reflexivity.
 Qed.

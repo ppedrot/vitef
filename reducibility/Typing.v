@@ -2,12 +2,18 @@ Require Import Omega Term Convertibility.
 
 Inductive type :=
 | atm : nat -> type
-| arr : type -> type -> type.
+| arr : type -> type -> type
+| sum : type -> type -> type.
 
 Inductive typing : list type -> term -> type -> Type :=
 | typing_var : forall Γ A n, List.nth_error Γ n = Some A -> typing Γ (var n) A
 | typing_lam : forall Γ A B t, typing (cons A Γ) t B -> typing Γ (lam t) (arr A B)
 | typing_app : forall Γ A B t u, typing Γ t (arr A B) -> typing Γ u A -> typing Γ (app t u) B
+| typing_lft : forall Γ A B t, typing Γ t A -> typing Γ (lft t) (sum A B)
+| typing_rgt : forall Γ A B t, typing Γ t B -> typing Γ (rgt t) (sum A B)
+| typing_cse : forall Γ A B C t u1 u2,
+  typing Γ t (sum A B) -> typing (cons A Γ) u1 C -> typing (cons B Γ) u2 C ->
+  typing Γ (cse t u1 u2) C
 .
 
 Notation "[ Γ ⊢ t : A ]" := (typing Γ t A) (t at level 0).
@@ -21,6 +27,11 @@ Inductive typing : shape -> list type -> term -> type -> Type :=
 | typing_var : forall Γ A n, List.nth_error Γ n = Some A -> typing ne Γ (var n) A
 | typing_lam : forall Γ A B t, typing nf (cons A Γ) t B -> typing nf Γ (lam t) (arr A B)
 | typing_app : forall Γ A B t u, typing ne Γ t (arr A B) -> typing nf Γ u A -> typing ne Γ (app t u) B
+| typing_lft : forall Γ A B t, typing nf Γ t A -> typing nf Γ (lft t) (sum A B)
+| typing_rgt : forall Γ A B t, typing nf Γ t B -> typing nf Γ (rgt t) (sum A B)
+| typing_cse : forall Γ A B C t u1 u2,
+  typing ne Γ t (sum A B) -> typing nf (cons A Γ) u1 C -> typing nf (cons B Γ) u2 C ->
+  typing ne Γ (cse t u1 u2) C
 .
 
 End NF.
@@ -74,6 +85,12 @@ intros Γ Δ A t el Ht; revert Δ el; induction Ht; intros Δ el Hel; cbn.
 + apply typing_app with A.
   - apply IHHt1; assumption.
   - apply IHHt2; assumption.
++ apply typing_lft, IHHt; assumption.
++ apply typing_rgt, IHHt; assumption.
++ apply typing_cse with A B.
+  - apply IHHt1; assumption.
+  - apply IHHt2; constructor; assumption.
+  - apply IHHt3; constructor; assumption.
 Qed.
 
 Lemma NF_typing_lift_compat : forall s Γ Δ A t el,
@@ -89,6 +106,12 @@ intros s Γ Δ A t el Ht; revert Δ el; induction Ht; intros Δ el Hel; cbn.
 + apply NF.typing_app with A.
   - apply IHHt1; assumption.
   - apply IHHt2; assumption.
++ apply NF.typing_lft, IHHt; assumption.
++ apply NF.typing_rgt, IHHt; assumption.
++ apply NF.typing_cse with A B.
+  - apply IHHt1; assumption.
+  - apply IHHt2; constructor; assumption.
+  - apply IHHt3; constructor; assumption.
 Qed.
 
 Lemma typing_lift_compose : forall Γ Δ Ξ e1 e2,
@@ -120,17 +143,27 @@ Lemma typing_wkn_n : forall Γ Δ A B t,
 Proof.
 intros Γ Δ A B t Ht.
 remember (Δ ++ Γ)%list as Ξ; revert Γ Δ B HeqΞ.
-induction Ht; cbn; intros Δ Ξ C ->.
+induction Ht; cbn; intros Δ Ξ X ->.
 + constructor.
-  revert n Δ e C; induction Ξ as [|D Ξ]; intros n Δ e C; cbn.
+  revert n Δ e X; induction Ξ as [|D Ξ]; intros n Δ e X; cbn.
   - assumption.
   - destruct n as [|n]; cbn in *; [assumption|].
     apply IHΞ; assumption.
 + apply typing_lam.
-  change (A :: (Ξ ++ C :: Δ))%list with ((cons A nil) ++ (Ξ ++ C :: Δ))%list.
+  change (A :: (Ξ ++ X :: Δ))%list with ((cons A nil) ++ (Ξ ++ X :: Δ))%list.
   rewrite List.app_assoc.
   apply IHHt; reflexivity.
 + eapply typing_app; intuition eauto.
++ apply typing_lft; intuition eauto.
++ apply typing_rgt; intuition eauto.
++ apply typing_cse with A B.
+  - intuition eauto.
+  - change (A :: (Ξ ++ X :: Δ))%list with ((cons A nil) ++ (Ξ ++ X :: Δ))%list.
+    rewrite List.app_assoc.
+    apply IHHt2; reflexivity.
+  - change (B :: (Ξ ++ X :: Δ))%list with ((cons B nil) ++ (Ξ ++ X :: Δ))%list.
+    rewrite List.app_assoc.
+    apply IHHt3; reflexivity.
 Qed.
 
 Lemma typing_wkn : forall Γ A B t,
@@ -168,6 +201,12 @@ intros Γ Δ A s t Ht; revert Δ s; induction Ht; intros Δ s Hs; cbn.
     { constructor; inversion IHHs; subst; assumption. }
 + constructor; apply IHHt; constructor; apply Hs.
 + apply typing_app with A; intuition.
++ apply typing_lft; intuition.
++ apply typing_rgt; intuition.
++ apply typing_cse with A B.
+  - intuition.
+  - apply IHHt2; constructor; assumption.
+  - apply IHHt3; constructor; assumption.
 Qed.
 
 Lemma typing_subs_compose : forall Γ Δ Ξ σ1 σ2,
