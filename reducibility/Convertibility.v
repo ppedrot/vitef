@@ -1,6 +1,6 @@
-Require Import Setoid CMorphisms Term.
+Require Import Setoid Morphisms Term.
 
-Inductive reduction : term -> term -> Type :=
+Inductive reduction : term -> term -> Prop :=
 | reduction_β : forall t u, reduction (app (lam t) u) (subs_term (CONS u ESID) t)
 | reduction_η : forall t, reduction (lam (app (lift_term (ELSHFT ELID) t) (var 0))) t
 | reduction_ι_l : forall t u1 u2, reduction (cse (lft t) u1 u2) (subs_term (CONS t ESID) u1)
@@ -15,13 +15,13 @@ Inductive reduction : term -> term -> Type :=
 | reduction_cse_r : forall t u1 u2 r, reduction u2 r -> reduction (cse t u1 u2) (cse t u1 r)
 .
 
-Inductive convertible : term -> term -> Type :=
+Inductive convertible : term -> term -> Prop :=
 | convertible_refl : forall t, convertible t t
 | convertible_sym : forall t u, convertible t u -> convertible u t
 | convertible_trans : forall t u r, convertible t u -> convertible u r -> convertible t r
 | convertible_step : forall t u, reduction t u -> convertible t u.
 
-Instance Equivalence_convertible : CRelationClasses.Equivalence convertible.
+Instance Equivalence_convertible : RelationClasses.Equivalence convertible.
 Proof.
 split.
 + intro; apply convertible_refl.

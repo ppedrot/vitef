@@ -239,13 +239,3 @@ intros Γ Δ Ξ σ1 σ2 Hσ1; revert Ξ σ2; induction Hσ1; cbn in *; intros Ξ
     constructor.
     apply IHHσ1; assumption.
 Qed.
-
-Lemma subject_reduction : forall Γ A t r,
-  [ Γ ⊢ t : A ] -> reduction t r -> [ Γ ⊢ r : A ].
-Proof.
-intros Γ A t r Ht Hr; revert Γ A Ht; induction Hr; intros Γ A Ht; cbn in *.
-+ inversion Ht; subst; inversion H2; subst.
-  apply typing_subs_compat with (Γ := cons A0 Γ); [assumption|].
-  constructor; [constructor|assumption].
-+ inversion Ht; subst; inversion H1; subst.
-Abort.
