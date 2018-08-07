@@ -39,7 +39,7 @@ End NF.
 Notation "[ Γ ⊢ne t : A ]" := (NF.typing NF.ne Γ t A) (t at level 0).
 Notation "[ Γ ⊢nf t : A ]" := (NF.typing NF.nf Γ t A) (t at level 0).
 
-Inductive typing_lift : lift -> list type -> list type -> Type :=
+Inductive typing_lift : lift -> list type -> list type -> Prop :=
 | typing_ELID : forall Γ, typing_lift ELID Γ Γ
 | typing_ELSHFT : forall el Γ Δ A,
   typing_lift el Γ Δ ->
@@ -50,6 +50,37 @@ Inductive typing_lift : lift -> list type -> list type -> Type :=
 .
 
 Notation "[ Γ ⊢lift e : Δ ]" := (typing_lift e Γ Δ) (e at level 0).
+
+Lemma typing_lift_rect :
+  forall P : lift -> list type -> list type -> Type,
+  (forall Γ : list type, P ELID Γ Γ) ->
+  (forall (el : lift) (Γ Δ : list type) (A : type),
+   [Γ ⊢lift el : Δ] -> P el Γ Δ -> P (ELSHFT el) (A :: Γ)%list Δ) ->
+  (forall (el : lift) (Γ Δ : list type) (A : type),
+   [Γ ⊢lift el : Δ] -> P el Γ Δ -> P (ELLFT el) (A :: Γ)%list (A :: Δ)%list) ->
+  forall (l : lift) (l0 l1 : list type), [l0 ⊢lift l : l1] -> P l l0 l1.
+Proof.
+intros P f f0 f1.
+fix F 1; intros e Γ Δ He; destruct e.
++ assert (Hrw : Γ = Δ).
+  { inversion He; subst; reflexivity. }
+  destruct Hrw; apply f.
++ destruct Γ as [|A Γ].
+  { exfalso; inversion He. }
+  assert (He' : [ Γ ⊢lift e : Δ ]).
+  { inversion He; subst; assumption. }
+  apply f0, F; apply He'.
++ destruct Γ as [|A Γ].
+  { exfalso; inversion He. }
+  destruct Δ as [|B Δ].
+  { exfalso; inversion He. }
+  assert (Hrw : A = B).
+  { inversion He; subst; reflexivity. }
+  destruct Hrw.
+  assert (He' : [ Γ ⊢lift e : Δ ]).
+  { inversion He; subst; assumption. }
+  apply f1, F; apply He'.
+Qed.
 
 Lemma nth_error_app : forall A (l1 l2 : list A) n,
   List.nth_error (l1 ++ l2)%list (length l1 + n) = List.nth_error l2 n.
