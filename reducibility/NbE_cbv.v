@@ -8,7 +8,7 @@ Set Implicit Arguments.
 
 Record eval_ntr (Γ : list type) A (t : term) := {
   eval_atm_red : term;
-  eval_atm_typ : [ Γ ⊢ne eval_atm_red : A ];
+  eval_atm_typ : inhabited [ Γ ⊢ne eval_atm_red : A ];
   eval_atm_cnv : convertible t eval_atm_red;
 }.
 
@@ -40,7 +40,7 @@ Lemma lift_eval_ntr : forall Γ Δ A t e, [ Δ ⊢lift e : Γ ] ->
 Proof.
 intros Γ Δ A t e He Ht.
 destruct Ht as [r Htr Hr]; exists (lift_term e r).
-- apply NF_typing_lift_compat with Γ; assumption.
+- destruct Htr as [Htr]; constructor; apply NF_typing_lift_compat with Γ; assumption.
 - apply convertible_lift; assumption.
 Qed.
 
@@ -91,6 +91,12 @@ intros Γ A; revert Γ; induction A as [n|A IHA B IHB|A IHA B IHB]; intros Γ t 
     eapply eval_ntr_convertible_compat; eassumption.
 Qed.
 
+Instance Proper_eval : Proper (eq ==> eq ==> convertible ==> iffT) eval.
+Proof.
+intros Γ Γ' <- A A' <- t t' Ht; split; intros; eapply eval_convertible_compat; try eassumption.
+symmetry; eassumption.
+Qed.
+
 Inductive eval_subs : list type -> list type -> subs term -> Type :=
 | eval_subs_ESID : forall Γ e, eval_subs Γ nil (subs_of_lift e)
 | eval_subs_CONS : forall Γ Δ A t σ, realizes Γ A t -> eval_subs Γ Δ σ -> eval_subs Γ (cons A Δ) (CONS t σ)
@@ -100,15 +106,15 @@ Inductive eval_subs : list type -> list type -> subs term -> Type :=
 
 Set Implicit Arguments.
 
-Record reified A := Reified {
-  reify_trm : forall Γ t, realizes Γ A t -> term;
-  reify_typ : forall Γ t (r : realizes Γ A t), [ Γ ⊢nf (reify_trm Γ t r) : A ];
-  reify_cvn : forall Γ t (r : realizes Γ A t), convertible t (reify_trm Γ t r);
+Record reified Γ A t := Reified {
+  reify_trm : term;
+  reify_typ : inhabited [ Γ ⊢nf reify_trm : A ];
+  reify_cvn : convertible t reify_trm;
 }.
 
 Record interp (A : type) := {
-  reflect : forall Γ t, [ Γ ⊢ne t : A ] -> eval Γ A t;
-  reify : reified A;
+  reflect : forall Γ t, inhabited [ Γ ⊢ne t : A ] -> eval Γ A t;
+  reify : forall Γ t, realizes Γ A t -> reified Γ A t;
 }.
 
 Unset Implicit Arguments.
@@ -118,57 +124,59 @@ Proof.
 induction A; split; cbn in *.
 + intros Γ t Ht; cbn in *.
   exists t; [assumption|constructor].
-+ unshelve refine (@Reified _ _ _ _).
-  - intros Γ t Ht; cbn in *.
++ intros Γ t Ht; unshelve refine (Reified _ _).
+  - cbn in *.
     refine (Ht.(eval_atm_red)).
-  - intros Γ t Ht; cbn in *.
-    apply NF.typing_ne; apply Ht.
-  - intros Γ t Ht; cbn in *.
+  - destruct Ht as [? [Ht] ?]; cbn in *.
+    constructor. apply NF.typing_ne; apply Ht.
+  - cbn in *.
     destruct Ht as [r ? Hr]; cbn.
     assumption.
 + intros Γ t Ht Δ e eε x xε.
-  pose (r := IHA1.(reify).(reify_trm) _ _ xε).
-  apply eval_convertible_compat with (t := (app (lift_term e t) r)).
-  unfold r; rewrite <- IHA1.(reify).(reify_cvn); reflexivity.
+  pose (r := (IHA1.(reify)  _ _ xε)).
+  apply eval_convertible_compat with (t := (app (lift_term e t) r.(reify_trm))).
+  { rewrite <- r.(reify_cvn); reflexivity. }
   apply IHA2.(reflect).
-  eapply NF.typing_app.
+  destruct r.(reify_typ) as [rε], Ht as [Ht].
+  constructor; eapply NF.typing_app.
   - apply NF_typing_lift_compat with Γ; eassumption.
-  - apply IHA1.(reify).
-+ unshelve refine (@Reified _ _ _ _); cbn.
-  - intros Γ t Ht.
-    specialize (Ht (cons A1 Γ) _ (typing_ELSHFT _ _ _ _ (typing_ELID _)) (var 0)).
-    unshelve refine (let Ht := Ht (IHA1.(reflect) (NF.typing_var _ _ _ _)) in _).
-    { reflexivity. }
-    unshelve refine ((lam ((IHA2.(reify).(@reify_trm _) (cons A1 Γ) (app _ (var 0)) _)))).
+  - apply rε.
++ intros Γ t Ht.
+  specialize (Ht
+    (cons A1 Γ) _
+    (typing_ELSHFT _ _ _ _ (typing_ELID _)) (var 0)
+    (IHA1.(reflect) (inhabits (NF.typing_var (cons A1 Γ) A1 0 eq_refl)))).
+  unshelve refine (Reified _ _); cbn.
+  - unshelve refine ((lam ((IHA2.(reify) (cons A1 Γ) (app _ (var 0)) _).(reify_trm)))).
     shelve.
     apply Ht.
-  - cbn; intros Γ t Ht.
+  - refine (let 'inhabits (Htr) := (IHA2.(reify) _ _ _).(reify_typ) in _).
+    constructor.
     apply NF.typing_lam.
-    apply IHA2.(reify).
-  - cbn; intros Γ t Ht.
-    etransitivity.
+    eexact Htr.
+  - etransitivity.
     2:{ apply convertible_lam, IHA2.(reify). }
     symmetry; apply convertible_step, reduction_η.
 + intros Γ t Ht.
   apply eval_sum_ntr; exists t.
   - assumption.
   - reflexivity.
-+ unshelve refine (@Reified _ _ _ _); cbn.
-  - intros Γ t Ht; cbn in *.
-    destruct Ht as [r Htr Hr|r Htr Hr|[r Htr Hr]].
-    { exact (lft (IHA1.(reify).(reify_trm) _ _ Htr)). }
-    { exact (rgt (IHA2.(reify).(reify_trm) _ _ Htr)). }
++ intros Γ t Ht.
+  destruct Ht as [r Htr Hr|r Htr Hr|[r Htr Hr]].
+  - unshelve refine (Reified _ _); cbn.
+    { exact (lft ((IHA1.(reify) _ _ Htr).(reify_trm))). }
+    { destruct (IHA1.(reify)) as [s [Hts] Hs].
+     cbn; constructor; apply NF.typing_lft; assumption. }
+    { rewrite Hr; apply convertible_lft, IHA1.(reify). }
+  - unshelve refine (Reified _ _); cbn.
+    { exact (rgt ((IHA2.(reify) _ _ Htr).(reify_trm))). }
+    { destruct (IHA2.(reify)) as [s [Hts] Hs].
+     cbn; constructor; apply NF.typing_rgt; assumption. }
+    { rewrite Hr; apply convertible_rgt, IHA2.(reify). }
+  - unshelve refine (Reified _ _); cbn.
     { refine r. }
-  - intros Γ t Ht; cbn in *.
-    destruct Ht as [r Htr Hr|r Htr Hr|[r Htr Hr]].
-    { apply NF.typing_lft, IHA1.(reify). }
-    { apply NF.typing_rgt, IHA2.(reify). }
-    { apply NF.typing_ne; assumption. }
-  - intros Γ t Ht; cbn in *.
-    destruct Ht as [r Htr Hr|r Htr Hr|[r Htr Hr]]; rewrite Hr.
-    { apply convertible_lft, IHA1.(reify). }
-    { apply convertible_rgt, IHA2.(reify). }
-    { reflexivity. }
+    { destruct Htr as [Htr]; constructor; apply NF.typing_ne; assumption. }
+    { assumption. }
 Qed.
 
 Lemma subs_term_CONS_SHFT_LIFT_n : forall t σ n,
@@ -246,26 +254,23 @@ intros Γ Δ A t σ Ht; revert Δ σ; induction Ht; cbn in *; intros Δ σ Hσ.
     eapply eval_convertible_compat; [symmetry; eapply convertible_step, reduction_ι_r|].
     rewrite <- subs_term_compose; cbn.
     apply IHHt3; constructor; assumption.
-  - eapply eval_convertible_compat.
-    shelve.
-    apply (completeness C).(reflect).
-    apply NF.typing_cse with A B.
-    { eexact Htr. }
-    { unshelve apply (completeness C).(reify); [shelve|].
-      apply IHHt2.
-      apply eval_subs_CONS, eval_subs_SHFT, Hσ.
+  - unshelve refine (let r1 := (completeness C).(reify) _ _ (IHHt2 (cons A Δ) (CONS (var 0) (SHFT σ)) _) in _).
+    { apply eval_subs_CONS, eval_subs_SHFT, Hσ.
       apply (completeness A).
-      apply (NF.typing_var _ _ 0); reflexivity. }
-    { unshelve apply (completeness C).(reify); [shelve|].
-      apply IHHt3.
-      apply eval_subs_CONS, eval_subs_SHFT, Hσ.
+      constructor; apply (NF.typing_var _ _ 0); reflexivity. }
+    unshelve refine (let r2 := (completeness C).(reify) _ _ (IHHt3 (cons B Δ) (CONS (var 0) (SHFT σ)) _) in _).
+    { apply eval_subs_CONS, eval_subs_SHFT, Hσ.
       apply (completeness B).
-      apply (NF.typing_var _ _ 0); reflexivity. }
-    Unshelve.
-    apply convertible_cse.
-    { symmetry; assumption. }
-    { rewrite <- (completeness C).(reify).(reify_cvn).
-      rewrite subs_term_CONS_SHFT_LIFT; reflexivity. }
-    { rewrite <- (completeness C).(reify).(reify_cvn).
-      rewrite subs_term_CONS_SHFT_LIFT; reflexivity. }
+      constructor; apply (NF.typing_var _ _ 0); reflexivity. }
+    apply eval_convertible_compat with (cse r r1.(reify_trm) r2.(reify_trm)).
+    { apply convertible_cse.
+      + symmetry; apply Hr.
+      + rewrite <- r1.(reify_cvn).
+        rewrite subs_term_CONS_SHFT_LIFT; reflexivity.
+      + rewrite <- r2.(reify_cvn).
+        rewrite subs_term_CONS_SHFT_LIFT; reflexivity.
+    }
+    apply (completeness C).(reflect).
+    destruct Htr as [Htr], r1.(reify_typ) as [rt1], r2.(reify_typ) as [rt2].
+    constructor; apply NF.typing_cse with A B; assumption.
 Qed.
