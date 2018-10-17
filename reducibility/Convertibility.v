@@ -70,6 +70,12 @@ transitivity (app t1 u2).
 + apply convertible_app_l; assumption.
 Qed.
 
+Instance Proper_convertible_lam : Proper (convertible ==> convertible) lam.
+Proof.
+intros t1 t2 Ht.
+apply convertible_lam; assumption.
+Qed.
+
 Lemma convertible_lft : forall t r,
   convertible t r -> convertible (lft t) (lft r).
 Proof.
