@@ -36,36 +36,14 @@ end.
 Definition realizes Γ A t :=
   (forall Δ e (eε : typing_lift e Δ Γ), eval Δ A (lift_term e t)).
 
-(*
-Lemma lift_eval_ntr : forall Γ Δ A t e, [ Δ ⊢lift e : Γ ] ->
-  eval_ntr Γ A t -> eval_ntr Δ A (lift_term e t).
+Lemma lift_realizes : forall Γ Δ A t e, [ Δ ⊢lift e : Γ ] ->
+  realizes Γ A t -> realizes Δ A (lift_term e t).
 Proof.
-intros Γ Δ A t e He Ht.
-destruct Ht as [r Htr Hr]; exists (lift_term e r).
-- destruct Htr as [Htr]; constructor; apply NF_typing_lift_compat with Γ; assumption.
-- apply convertible_lift; assumption.
+intros Γ Δ A t e eε Ht Ξ e' eε'.
+rewrite <- lift_term_compose.
+apply Ht.
+eapply typing_lift_compose; eassumption.
 Qed.
-
-Lemma lift_eval : forall Γ Δ A t e, [ Δ ⊢lift e : Γ ] ->
-  eval Γ A t -> eval Δ A (lift_term e t).
-Proof.
-intros Γ Δ A; revert Γ Δ; induction A; intros Γ Δ t e He Ht; cbn in *.
-+ eapply lift_eval_ntr; eassumption.
-+ intros Ξ e' He' x xε.
-  rewrite <- lift_term_compose.
-  apply Ht; [|assumption].
-  apply typing_lift_compose with Δ; assumption.
-+ destruct Ht as [r Htr Hr|r Htr Hr|Ht].
-  - apply eval_sum_lft with (lift_term e r).
-    { apply IHA1 with Γ; assumption. }
-    { apply convertible_lift with (r := lft _); assumption. }
-  - apply eval_sum_rgt with (lift_term e r).
-    { apply IHA2 with Γ; assumption. }
-    { apply convertible_lift with (r := rgt _); assumption. }
-  - apply eval_sum_ntr; eapply lift_eval_ntr; eassumption.
-Qed.
-*)
-(* Definition realizes Γ A t := forall Δ (e : lift) (eε : typing_lift e Δ Γ), eval Δ A (lift_term e t). *)
 
 Lemma eval_ntr_convertible_compat : forall Γ A t r, convertible t r -> eval_ntr Γ A t -> eval_ntr Γ A r.
 Proof.
@@ -97,13 +75,6 @@ Proof.
 intros Γ Γ' <- A A' <- t t' Ht; split; intros; eapply eval_convertible_compat; try eassumption.
 symmetry; eassumption.
 Qed.
-
-Inductive eval_subs : list type -> list type -> subs term -> Type :=
-| eval_subs_ESID : forall Γ e, eval_subs Γ nil (subs_of_lift e)
-| eval_subs_CONS : forall Γ Δ A t σ, realizes Γ A t -> eval_subs Γ Δ σ -> eval_subs Γ (cons A Δ) (CONS t σ)
-| eval_subs_SHFT : forall Γ Δ A σ, eval_subs Γ Δ σ -> eval_subs (cons A Γ) Δ (SHFT σ)
-(* | eval_subs_LIFT : forall Γ Δ A σ, eval_subs Γ Δ σ -> eval_subs (cons A Γ) (cons A Δ) (LIFT σ) *)
-.
 
 Set Implicit Arguments.
 
@@ -173,14 +144,16 @@ induction A; split; cbn in *.
     eapply NF_typing_lift_compat; eassumption.
   - reflexivity.
 + intros Γ t Ht.
+  specialize (Ht Γ ELID (typing_ELID _)).
+  rewrite lift_term_ELID in Ht.
   destruct Ht as [r Htr Hr|r Htr Hr|[r Htr Hr]].
   - unshelve refine (Reified _ _); cbn.
-    { exact (lft ((IHA1.(reify) _ _ Htr).(reify_trm))). }
+    { exact (lft ((IHA1.(reify) Htr).(reify_trm))). }
     { destruct (IHA1.(reify)) as [s [Hts] Hs].
      cbn; constructor; apply NF.typing_lft; assumption. }
     { rewrite Hr; apply convertible_lft, IHA1.(reify). }
   - unshelve refine (Reified _ _); cbn.
-    { exact (rgt ((IHA2.(reify) _ _ Htr).(reify_trm))). }
+    { exact (rgt ((IHA2.(reify) Htr).(reify_trm))). }
     { destruct (IHA2.(reify)) as [s [Hts] Hs].
      cbn; constructor; apply NF.typing_rgt; assumption. }
     { rewrite Hr; apply convertible_rgt, IHA2.(reify). }
@@ -210,6 +183,84 @@ Proof.
 intros t σ; apply subs_term_CONS_SHFT_LIFT_n with (n := 0).
 Qed.
 
+(*
+Inductive eval_subs : list type -> list type -> subs term -> Type :=
+| eval_subs_ESID : forall Γ e, eval_subs Γ nil (subs_of_lift e)
+| eval_subs_CONS : forall Γ Δ A t σ, realizes Γ A t -> eval_subs Γ Δ σ -> eval_subs Γ (cons A Δ) (CONS t σ)
+| eval_subs_SHFT : forall Γ Δ A σ, eval_subs Γ Δ σ -> eval_subs (cons A Γ) Δ (SHFT σ)
+(* | eval_subs_LIFT : forall Γ Δ A σ, eval_subs Γ Δ σ -> eval_subs (cons A Γ) (cons A Δ) (LIFT σ) *)
+.
+
+Lemma eval_subst_lift : forall Γ Δ Ξ e σ,
+  [Ξ ⊢lift e : Δ] ->
+  eval_subs Δ Γ σ ->
+  eval_subs Ξ Γ (subs_compose subs_term (subs_of_lift e) σ).
+Proof.
+intros Γ Δ Ξ e σ eε Hσ.
+revert Γ σ Hσ; induction eε; intros Ξ σ Hσ; cbn.
+- assumption.
+- constructor; apply IHeε; assumption.
+- remember (A :: Δ)%list as Ω; revert A Δ eε IHeε HeqΩ; induction Hσ; intros B Ξ eε IHeε HeqΩ; subst.
+  { clear. destruct e; cbn.
+    - change (LIFT (subs_of_lift el)) with (@subs_of_lift term (ELLFT el)); constructor.
+    - rewrite <- subs_lift_compose; do 2 constructor.
+    - rewrite <- subs_lift_compose. refine (eval_subs_ESID _ (ELLFT _)).
+  }
+  { constructor.
+    + change (LIFT (subs_of_lift el)) with (@subs_of_lift term (ELLFT el)).
+      rewrite subs_term_lift. eapply lift_realizes; [constructor|]; eassumption.
+    + eapply IHHσ; [eassumption|eassumption|reflexivity]. }
+  { constructor; apply IHeε.
+    injection HeqΩ; intros -> ->; assumption. }
+Qed.
+*)
+
+Inductive eval_subs : list type -> list term -> Type :=
+| eval_subs_nil : eval_subs nil nil
+| eval_subs_cons : forall Γ A t σ,
+  eval_subs Γ σ -> realizes nil A t -> eval_subs (A :: Γ) (t :: σ).
+
+Fixpoint closed (σ : list term) := match σ with
+| nil => ESID
+| cons t σ => CONS t (closed σ)
+end.
+
+Lemma realizes_eval : forall Γ A t, realizes Γ A t -> eval Γ A t.
+Proof.
+intros Γ A t Ht.
+rewrite <- lift_term_ELID.
+apply Ht; constructor.
+Qed.
+
+(* Γ ⊢ t : A -> α ⊩ Γ -> α ⊩ A *)
+Lemma soundness : forall Γ A t σ,
+  [ Γ ⊢ t : A ] -> eval_subs Γ σ -> realizes nil A (subs_term (closed σ) t).
+Proof.
+intros Γ A t σ Ht; revert σ; induction Ht; cbn in *; intros σ Hσ.
++ revert n A e; induction Hσ; intros n B e'; cbn in *.
+  - apply List.nth_error_In in e'; elim e'.
+  - destruct n as [|n]; cbn in *.
+    { injection e'; intros ->; rewrite lift_term_ELID; assumption. }
+    { apply IHHσ; assumption. }
++ intros Δ e eε x xε; cbn.
+  eapply eval_convertible_compat; [symmetry; apply convertible_β|].
+  rewrite <- subs_term_lift, <- !subs_term_compose; cbn.
+  eapply eval_convertible_compat; [|unshelve eapply (IHHt (cons x σ) _ _ _ eε); constructor].
+admit.
+assumption.
+intros Ω e' e'ε.
+apply xε.
+  apply (IHHt (cons x σ)); constructor; [assumption|].
+  apply realizes_eval; assumption.
++ apply IHHt1; [assumption|].
+  intros Δ e eε.
+  rewrite <- subs_term_lift.
+  rewrite <- subs_term_compose.
+
+  apply (IHHt2 Δ σ Hσ).
+  eapply typing_lift_compose; eassumption.
+
+
 (* Γ ⊢ t : A -> α ⊩ Γ -> α ⊩ A *)
 Lemma soundness : forall Γ Δ A t σ,
   [ Γ ⊢ t : A ] -> eval_subs Δ Γ σ -> eval Δ A (subs_term σ t).
@@ -218,46 +269,51 @@ intros Γ Δ A t σ Ht; revert Δ σ; induction Ht; cbn in *; intros Δ σ Hσ.
 + revert n A e; induction Hσ; intros n B e'; cbn in *.
   - apply List.nth_error_In in e'; elim e'.
   - destruct n as [|n]; cbn in *.
-    { injection e'; intros ->; rewrite lift_term_ELID; apply e; constructor. }
+    { injection e'; intros ->; rewrite lift_term_ELID; apply r; constructor. }
     { apply IHHσ; assumption. }
   - rewrite expand_term_SHFT.
-    apply lift_eval with Γ; [repeat constructor|].
+    apply lift_realizes with Γ; [repeat constructor|].
     apply IHHσ; assumption.
 + intros Ξ e eε x xε.
   eapply eval_convertible_compat; [symmetry; apply convertible_β|].
   rewrite <- subs_term_lift, <- !subs_term_compose; cbn.
-  apply IHHt. constructor; [assumption|].
-  clear - eε Hσ.
-  revert Γ σ Hσ; induction eε; intros Ξ σ Hσ; cbn.
-  - assumption.
-  - constructor; apply IHeε; assumption.
-  - remember (A :: Δ)%list as Ω; revert A Δ eε IHeε HeqΩ; induction Hσ; intros B Ξ eε IHeε HeqΩ; subst.
-    { clear. destruct e; cbn.
-      - change (LIFT (subs_of_lift el)) with (@subs_of_lift term (ELLFT el)); constructor.
-      - rewrite <- subs_lift_compose; do 2 constructor.
-      - rewrite <- subs_lift_compose. refine (eval_subs_ESID _ (ELLFT _)).
-    }
-    { constructor.
-      + change (LIFT (subs_of_lift el)) with (@subs_of_lift term (ELLFT el)).
-        rewrite subs_term_lift; eapply lift_eval; [constructor|]; eassumption.
-      + eapply IHHσ; [eassumption|eassumption|reflexivity]. }
-    { constructor; apply IHeε.
-      injection HeqΩ; intros -> ->; assumption. }
-+ rewrite <- (lift_term_ELID (subs_term σ t)).
-  apply IHHt1 with Δ.
-  - assumption.
-  - constructor.
-  - apply IHHt2; assumption.
-+ apply eval_sum_lft with (subs_term σ t).
-  - apply IHHt; assumption.
+  match goal with [ |- eval _ _ ?t ] => rewrite <- (lift_term_ELID t) end.
+  refine (IHHt _ _ _ Ξ ELID (typing_ELID _)).
+  constructor; [intros ? ? ?; apply xε; assumption|].
+  eapply eval_subst_lift; eassumption.
++ intros Ξ e eε.
+  specialize (IHHt1 Δ σ Hσ Ξ e eε).
+  cbn in *.
+  apply IHHt1.
+  intros Ω α αε; rewrite <- lift_term_compose.
+  apply (IHHt2 Δ σ Hσ).
+  eapply typing_lift_compose; eassumption.
++ intros Ξ e eε; cbn.
+  apply eval_sum_lft with (lift_term e (subs_term σ t)).
+  - intros Ω α αε; rewrite <- lift_term_compose.
+    eapply (IHHt Δ σ Hσ), typing_lift_compose; eassumption.
   - reflexivity.
-+ apply eval_sum_rgt with (subs_term σ t).
-  - apply IHHt; assumption.
++ intros Ξ e eε; cbn.
+  apply eval_sum_rgt with (lift_term e (subs_term σ t)).
+  - intros Ω α αε; rewrite <- lift_term_compose.
+    eapply (IHHt Δ σ Hσ), typing_lift_compose; eassumption.
   - reflexivity.
-+ destruct (IHHt1 _ _ Hσ) as [r Htr Hr|r Htr Hr|[r Htr Hr]].
++ intros Ξ e eε; cbn.
+  destruct (IHHt1 _ _ Hσ Ξ e eε) as [r Htr Hr|r Htr Hr|[r Htr Hr]].
   - eapply eval_convertible_compat.
     { apply convertible_cse_e; symmetry; eassumption. }
     eapply eval_convertible_compat; [symmetry; eapply convertible_step, reduction_ι_l|].
+    eapply eval_convertible_compat; [|refine (IHHt2 _ (CONS (lift_term e r) σ) _ _ _ eε)].
+    ++ admit.
+    ++ constructor; [|assumption].
+      change (realizes Ξ A r) in Htr.
+       clear - e eε Htr; intros Σ e' e'ε.
+       rewrite <- lift_term_compose. apply Htr.
+       eapply typing_lift_compose; [eassumption|].
+       apply Htr.
+unfold realizes.
+    rewrite <- subs_term_lift.
+    rewrite <- subs_term_compose; cbn.
     rewrite <- subs_term_compose; cbn.
     apply IHHt2; constructor; assumption.
   - eapply eval_convertible_compat.
