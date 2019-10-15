@@ -1,5 +1,6 @@
 Set Primitive Projections.
 Set Universe Polymorphism.
+Set Polymorphic Inductive Cumulativity.
 
 Inductive seq {A : Type} (x : A) : A -> SProp := srefl : seq x x.
 
