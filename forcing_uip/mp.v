@@ -332,3 +332,86 @@ admit.
 Admitted.
 
 End Make.
+
+Module MP_S <: S.
+
+Definition ℙ@{} : Set := nat -> bool.
+
+Inductive isTrue : bool -> Set := IsTrue : isTrue true.
+
+Definition le₀@{} (p q : ℙ) : Set := forall n, isTrue (q n) -> isTrue (p n).
+
+End MP_S.
+
+Module MP.
+
+Include Make(MP_S).
+
+Definition inf (p q : MP_S.ℙ) : MP_S.ℙ := fun n => orb (p n) (q n).
+
+Lemma inf_le : forall p q, inf p q ≤ p.
+Proof.
+intros p q r k n Hn.
+unfold inf, orb.
+destruct (k n Hn); constructor.
+Defined.
+
+Lemma inf_l : forall p q r, q ≤ p -> inf q r ≤ inf p r.
+Proof.
+intros p q r α s k n Hn.
+unfold le, inf, orb in *.
+specialize (k n Hn).
+specialize (α p (fun n e => e) n).
+cbn in *.
+remember (q n) as v; destruct v; [constructor|].
+remember (p n) as w; destruct w; [|assumption].
+specialize (α MP_S.IsTrue).
+refine (match α in MP_S.isTrue b return if b then unit else _ with MP_S.IsTrue => tt end).
+Defined.
+
+Definition E {p} : @El p Typeᶠ.
+Proof.
+unshelve refine (mkEl _ (@Type₀ p) (@Typeε p) (fun q α => mkTYPE _ _ _) _).
++ refine (fun r β => {n : nat & MP_S.isTrue (r n)}).
++ refine (fun e => sTrue).
++ refine (fun q α r β => srefl _).
+Defined.
+
+Fixpoint lift_nat {p} (n : nat) : @nat_ p :=
+match n with
+| O => O_
+| S n => S_ (fun q α => lift_nat n)
+end.
+
+Definition lift_natε {p} (n : nat) :
+  ((natᶠ).(el₀) p !).(rel) (fun q α => lift_nat n).
+Proof.
+induction n; cbn in *.
++ constructor.
++ refine (SR _ IHn).
+Defined.
+
+Definition purify {p} (f : @El p (Arr natᶠ boolᶠ)) (n : nat) : bool.
+Proof.
+pose (b := f.(el₀) p ! (mkEl _ natᶠ.(el₀) natᶠ.(elε) (fun q α => lift_nat n) (fun q α => lift_natε n))).
+destruct b; [left|right].
+Defined.
+
+Definition local {p}
+  (f : @El p (Arr natᶠ boolᶠ))
+  (A : @El p Typeᶠ) : @El p Typeᶠ.
+Proof.
+unshelve refine (mkEl _ (@Type₀ p) (@Typeε p) (fun q α => mkTYPE _ _ _) _).
++ refine (fun r β => _).
+  refine (forall s (γ : s ≤ inf r (purify f)), (A.(el₀) s _).(typ) _ !).
+  refine (α ∘ β ∘ inf_le _ _ ∘ γ).
++ cbn. intro x.
+  unshelve refine (
+    forall r (β : r ≤ inf q (purify f)), (A.(el₀) r _).(rel) _).
+  - refine (inf_le _ _ ∘ inf_l _ _ _ α ∘ β).
+  - refine (fun s γ => _).
+    cbn in *.
+    refine (cast _ A.(elε) _ _ _).
+cbn.
+
+End MP.
