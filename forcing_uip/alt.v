@@ -2,7 +2,7 @@ Set Primitive Projections.
 Set Universe Polymorphism.
 Set Polymorphic Inductive Cumulativity.
 
-Inductive seq {A : Type} (x : A) : A -> SProp := srefl : seq x x.
+Inductive seq@{i} {A : Type@{i}} (x : A) : A -> SProp := srefl : seq x x.
 
 Notation "x ≡ y" := (seq x y) (at level 70).
 
@@ -36,7 +36,7 @@ Notation "α ∘ β" := (@le_cmp _ _ _ β α) (at level 35).
 
 Notation "α · x" := (fun r β => x r (α ∘ β)) (at level 40).
 
-Record TYPE@{i} (p : ℙ) := mkTYPE {
+Record TYPE@{i} (p : ℙ) : Type@{i+1} := mkTYPE {
   typ : forall q (α : q ≤ p), Type@{i};
   rel : (forall q (α : q ≤ p), typ q α) -> SProp;
 }.

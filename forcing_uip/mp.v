@@ -138,6 +138,12 @@ Definition lift {p} {A Aε} q (α : q ≤ p)
 
 Notation "α ∗ x" := (@lift _ _ _ _ α x) (at level 40).
 
+Definition plift {p} {A : El Typeᶠ} {q} {α : q ≤ p} {r} (β : r ≤ q)
+  (x : El (α ∗ A)) : El (α ∘ β ∗ A) :=
+  mkEl _ _ (β · x.(el₀)) (β · x.(elε)).
+
+Notation "α • x" := (@plift _ _ _ _ _ α x) (at level 40).
+
 Definition mkel {p} (A : @El p Typeᶠ)
   (x : El₀ A.(el₀)) (xε : Elε A.(el₀) A.(elε) x) : El A.
 Proof.
@@ -166,16 +172,18 @@ unshelve refine (fun A B => mkEl _ _ (fun q α => mkTYPE _ _ _) _).
   reflexivity.
 Defined.
 
-Definition lamᶠ {p A B}
-  (f : forall q (α : q ≤ p) (x : El (α ∗ A)), El (α ∗ B)) : El (Arr A B).
+Notation "A →ᶠ B" := (Arr A B) (at level 99, right associativity, B at level 200).
+
+Definition lamᶠ {p A B q} {α : q ≤ p}
+  (f : forall r (β : r ≤ q) (x : El (α ∘ β ∗ A)), El (α ∘ β ∗ B)) : El (α ∗ Arr A B).
 Proof.
 unshelve refine (mkEl _ _ _ _).
-+ unshelve refine (fun q (α : q ≤ p) x => (f q α x).(el₀) q !).
-+ unshelve refine (fun q (α : q ≤ p) x => (f q α x).(elε) q !).
++ unshelve refine (fun r (β : r ≤ q) x => (f r β x).(el₀) r !).
++ unshelve refine (fun r (β : r ≤ q) x => (f r β x).(elε) r !).
 Defined.
 
-Definition appᶠ {p A B}
-  (f : @El p (Arr A B)) (x : El A) : El B.
+Definition appᶠ {p A B q} {α : q ≤ p}
+  (f : @El q (α ∗ Arr A B)) (x : El (α ∗ A)) : El (α ∗ B).
 Proof.
 unshelve refine (mkEl _ _ _ _).
 + unshelve refine (fun q α => f.(el₀) q α (α ∗ x)).
@@ -186,7 +194,7 @@ Goal forall p
   (A : @El p Typeᶠ)
   (B : @El p Typeᶠ)
   f (x : El A) q (α : q ≤ p),
-  (@appᶠ p A B (lamᶠ f) x).(el₀) q α = (f q α (α ∗ x)).(el₀) q !.
+  (@appᶠ p A B p ! (lamᶠ f) x).(el₀) q α = (f q α (α ∗ x)).(el₀) q !.
 Proof.
 intros.
 reflexivity.
@@ -196,7 +204,7 @@ Goal forall p
   (A : @El p Typeᶠ)
   (B : @El p Typeᶠ)
   f (x : El A) q (α : q ≤ p),
-  (@appᶠ p A B (lamᶠ f) x).(elε) q α = (f q α (α ∗ x)).(elε) q !.
+  (@appᶠ p A B p ! (lamᶠ f) x).(elε) q α = (f q α (α ∗ x)).(elε) q !.
 Proof.
 intros.
 reflexivity.
@@ -230,15 +238,23 @@ refine (@cast q
 + refine (fun q α r β => srefl _).
 Defined.
 
-Definition dlamᶠ {p}
+Definition dlamᶠ {p q} {α : q ≤ p}
   {A}
   {B : El (Arr A Typeᶠ)}
-  (f : forall q (α : q ≤ p) (x : El (α ∗ A)), El (@appᶠ _ (α ∗ A) Typeᶠ (α ∗ B) x))
-  : El (Prod A B).
+  (f : forall r (β : r ≤ q) (x : @El r (α ∘ β ∗ A)), @El r (@appᶠ r (α ∘ β ∗ A) (α ∘ β ∗ Typeᶠ) r ! (α ∘ β ∗ B) x))
+  : El (α ∗ Prod A B).
 Proof.
 unshelve refine (mkEl _ _ _ _).
-+ unshelve refine (fun q (α : q ≤ p) x => (f q α x).(el₀) q !).
-+ unshelve refine (fun q (α : q ≤ p) x => (f q α x).(elε) q !).
++ unshelve refine (fun r (β : r ≤ q) x => (f r β x).(el₀) r !).
++ unshelve refine (fun r (β : r ≤ q) x => (f r β x).(elε) r !).
+Defined.
+
+Definition dappᶠ {p A B q} {α : q ≤ p}
+  (f : @El q (α ∗ Prod A B)) (x : El (α ∗ A)) : El (appᶠ (α ∗ B) x).
+Proof.
+unshelve refine (mkEl _ _ _ _).
++ unshelve refine (fun q α => f.(el₀) q α (α ∗ x)).
++ unshelve refine (fun q α => f.(elε) q α (α ∗ x)).
 Defined.
 
 Inductive nat_ {p} :=
@@ -276,37 +292,188 @@ Definition Prodᶠ {p}
   (A : @El p Typeᶠ)
   (B : forall q (α : q ≤ p), El (α ∗ A) -> @El q Typeᶠ) : @El p Typeᶠ.
 Proof.
-unshelve refine (Prod A (@lamᶠ _ _ _ (fun q α x => _))).
+unshelve refine (Prod A (@lamᶠ _ _ _ _ ! (fun q α x => _))).
 refine (B q α x).
 Defined.
 
-Definition nat_elim p
-  (P : @El p (Arr natᶠ Typeᶠ))
-  (uO : El (appᶠ P Oᶠ))
-  (uS : @El p (Prod natᶠ
-    (@lamᶠ _ natᶠ Typeᶠ (fun q α n =>
-      Arr (@appᶠ _ natᶠ Typeᶠ (α ∗ P) n)
-      (@appᶠ _ natᶠ Typeᶠ (α ∗ P) (appᶠ Sᶠ n))))))
-  (n : El natᶠ)
-:
-  El (appᶠ P n).
+Ltac fold_prod :=
+match goal with
+| [ |- El (?α ∗ (Prodᶠ ?A ?B)) ] => change (El (Prodᶠ (α ∗ A) (α · B)))
+end.
+
+Ltac fold_lift :=
+match goal with
+| [ |- El (?β ∗ (?α ∗ ?A)) ] => change (El (α ∘ β ∗ A))
+end.
+
+Ltac fold_lift_in H :=
+match type of H with
+| El (?β ∗ (?α ∗ ?A)) => change (El (α ∘ β ∗ A)) in H
+end.
+
+Definition eta_nat₀ {p} (n₀ : @nat_ p) : @El₀ p natᶠ.(el₀).
 Proof.
+refine (fun q α => _).
+refine (match n₀ with O_ => O_ | S_ m => S_ (α · m) end).
+Defined.
+
+Definition eta_natR {p} (n : @El p natᶠ) : @natR p (eta_nat₀ (n.(el₀) p !)).
+Proof.
+destruct n as [n₀ nε]; cbn.
+specialize (nε p !).
+change (natR n₀) in nε.
+refine (
+  match nε in natR n₀ return natR (eta_nat₀ (n₀ p !))
+  with
+  | OR => OR
+  | SR m mε => SR m mε
+  end
+).
+Defined.
+
+Definition eta_natᶠ {p} (n₀ : @nat_ p) (nε : natR (eta_nat₀ n₀)) : @El p natᶠ.
+Proof.
+unshelve refine (mkel _ _ _).
++ refine (eta_nat₀ n₀).
++ refine (fun q α => _).
+  set (n := eta_nat₀ n₀) in *; clearbody n.
+  cbn; induction nε.
+  - constructor.
+  - refine (SR (α · n) IHnε).
+Defined.
+
+Lemma el₀_inj : forall A (Aε : A -> SProp) x₀ y₀ (xε : Aε x₀) (yε : Aε y₀),
+  x₀ ≡ y₀ -> mkEl A Aε x₀ xε ≡ mkEl A Aε y₀ yε.
+Proof.
+destruct 1.
+reflexivity.
+Defined.
+
+Lemma eta_natᶠ_eq : forall p n, @eta_natᶠ p (n.(el₀) p !) (eta_natR _) ≡ n.
+Proof.
+intros p [n₀ nε].
+apply el₀_inj.
+cbn.
+specialize (nε p !).
+change (natR n₀) in nε.
+induction nε.
++ reflexivity.
++ destruct IHnε.
+  reflexivity.
+Defined.
+
+Inductive natI {p} : @El p natᶠ -> Type :=
+| OI : natI Oᶠ
+| SI : forall n, natI n -> natI (@appᶠ _ natᶠ natᶠ _ ! Sᶠ n).
+
+Definition natI_gen : forall p n, @natI p n.
+Proof.
+intros p n.
+destruct (eta_natᶠ_eq _ n).
+generalize (eta_natR n) as nε.
+generalize (n.(el₀) p !) as n₀.
+clear n.
+induction n₀ as [|p m₀ IHm₀]; intros nε.
++ constructor.
++ unfold eta_natᶠ.
+
+assert (mε : natR (eta_nat₀ m₀)).
+unfold eta_natᶠ; cbn.
+refine (SI _ _).
+
+Definition nat_elimᶠ p
+  (P : @El p (Arr natᶠ Typeᶠ)) :
+  @El p (
+  ! ∗ (appᶠ (! ∗ P) Oᶠ →ᶠ
+  (Prod natᶠ
+    (lamᶠ (fun q α (n : @El q (! ∘ α ∗ @natᶠ p)) =>
+      Arr (appᶠ (α ∗ P) (! ∗ n))
+      (appᶠ (α ∗ P) (appᶠ (! ∗ Sᶠ) n)) : El (α ∗ Typeᶠ)))) →ᶠ
+  Prodᶠ natᶠ (fun q α n => appᶠ (α ∗ P) n))).
+Proof.
+refine (lamᶠ (fun q α pO => _)).
+refine (lamᶠ (fun r β pS => _)).
+refine (dlamᶠ (fun s γ n => _)).
+change (El (appᶠ (α ∘ β ∘ γ ∗ P) n)).
+destruct (eta_natᶠ_eq _ n).
+destruct n as [n₀ nε].
+cbn.
+unfold eta_natR.
+cbn.
+
+destruct (n₀ s !).
+specialize (nε s !).
 assert (e :
-    match n.(el₀) p ! with
-    | O_ => fun q (α : q ≤ p) => O_
-    | S_ m => fun q (α : q ≤ p) => S_ (α · m)
+    match n.(el₀) s ! with
+    | O_ => fun t (δ : t ≤ s) => O_
+    | S_ m => fun t (δ : t ≤ s) => S_ (δ · m)
     end ≅ n.(el₀)).
 {
-assert (nε : natR n.(el₀)) by refine (n.(elε) p !).
+assert (nε : natR n.(el₀)) by refine (n.(elε) s !).
 destruct nε; reflexivity.
 }
-change n with (mkel _ n.(el₀) n.(elε)).
-refine (J_heq _ _ (fun n _ => forall nε, El (appᶠ P (mkel natᶠ n nε))) _ _ e n.(elε)).
-intros nε.
-destruct (el₀ n p !).
-+ apply uO.
-+
-Admitted.
+revert e.
+generalize (el₀ n s !) as n₀.
+intros n₀; revert n.
+revert n₀.
+fix F 1.
+intros [|m₀] n e.
+(* induction n₀ as [s|s m₀ IHm]; intros n e. *)
++ change n with (mkel _ n.(el₀) n.(elε)).
+  refine (J_heq _ _ (fun n _ => forall nε,
+  El
+    (appᶠ ((α ∘ β) ∘ γ ∗ P)
+       (mkel (((! ∘ α) ∘ β) ∘ γ ∗ natᶠ) n nε))
+  ) _ _ e n.(elε)).
+  intros nε.
+  apply (β ∘ γ ∗ pO).
++ change n with (mkel _ n.(el₀) n.(elε)).
+  refine (J_heq _ _ (fun n _ => forall nε,
+  El
+    (appᶠ ((α ∘ β) ∘ γ ∗ P)
+       (mkel (((! ∘ α) ∘ β) ∘ γ ∗ natᶠ) n nε))
+  ) _ _ e n.(elε)).
+  intros nε.
+ unshelve epose (m := mkel natᶠ m₀ _).
+  { refine (fun t δ => _).
+    specialize (nε t δ); cbn in *.
+    refine (match nε in natR n return
+      match n t ! return SProp with
+      | O_ => sTrue
+      | S_ m => natR m
+      end
+    with OR => sI | SR _ mε => mε
+    end).
+  }
+  change (El (appᶠ (α ∘ β ∘ γ ∗ P) (! ∗ appᶠ (! ∗ Sᶠ) m))).
+  assert (v := dappᶠ (γ • pS) m).
+  change (El (appᶠ (α ∘ β ∘ γ ∗ P) m →ᶠ appᶠ (α ∘ β ∘ γ ∗ P) (appᶠ (! ∗ Sᶠ) m))) in v.
+  refine (appᶠ (! ∗ v) _).
+  refine (F (m₀ s !) m _).
+  assert (mε := m.(elε) s !).
+  cbn in mε.
+  change (natR m₀) in mε.
+  destruct mε; reflexivity.
+Defined.
+
+Goal forall p P pO pS n,
+  (dappᶠ (appᶠ (appᶠ (nat_elimᶠ p P) pO) pS) (appᶠ (! ∗ Sᶠ) n)).(el₀) p ! =
+  (@appᶠ p (appᶠ (! ∗ P) n) (appᶠ (! ∗ P) (appᶠ (! ∗ Sᶠ) n)) p ! (dappᶠ pS n) (dappᶠ (appᶠ (appᶠ (nat_elimᶠ p P) pO) pS) n)).(el₀) p !.
+Proof.
+intros p P pO pS n.
+unfold appᶠ, dappᶠ.
+repeat change (el₀ (mkEl _ _ ?x _)) with x.
+match goal with [ |- context (el₀ (mkEl _ _
+cbv iota.
+unfold Sᶠ.
+cbn.
+unfold dappᶠ; cbn.
+
+
+unfold lift.
+unfold
+lazy.
+reflexivity.
 
 Inductive bool_ {p : ℙ} :=
 | true_ : bool_
