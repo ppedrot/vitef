@@ -256,6 +256,18 @@ unshelve refine (mkEl _ _ _ _).
 + unshelve refine (fun q (α : q ≤ p) x => (f q α x).(elε) q !).
 Defined.
 
+Definition dappᶠ {p}
+  {A : @El p Typeᶠ}
+  {B : El (Arr A Typeᶠ)}
+  (f : El (Prod A B))
+  (x : El A)
+  : El (appᶠ B x).
+Proof.
+unshelve refine (mkEl _ _ _ _).
++ unshelve refine (fun q (α : q ≤ p) => f.(el₀) q α (α ∗ x)).
++ unshelve refine (fun q (α : q ≤ p) => f.(elε) q α (α ∗ x)).
+Defined.
+
 Inductive nat_ {p} :=
 | O_ : nat_
 | S_ : forall (n : forall q (α : q ≤ p), @nat_ q), nat_.
@@ -406,22 +418,14 @@ Definition nat_elim p
 :
   El (appᶠ P n).
 Proof.
-assert (e :
-    match n.(el₀) p ! with
-    | O_ => fun q (α : q ≤ p) => O_
-    | S_ m => fun q (α : q ≤ p) => S_ (α · m)
-    end ≅ n.(el₀)).
-{
-assert (nε : natR n.(el₀)) by refine (n.(elε) p !).
-destruct nε; reflexivity.
-}
-change n with (mkel _ n.(el₀) n.(elε)).
-refine (J_heq _ _ (fun n _ => forall nε, El (appᶠ P (mkel natᶠ n nε))) _ _ e n.(elε)).
-intros nε.
-destruct (el₀ n p !).
-+ apply uO.
-+
-Admitted.
+refine (nat_elim_in p (fun n => El (appᶠ P n)) _ _ _).
++ refine uO.
++ let T := type of uS in
+  match T with
+  | El (Prod ?nat ?f) =>
+    unshelve refine (fun n Hn => @appᶠ p (appᶠ P n) (appᶠ P (appᶠ Sᶠ n)) (@dappᶠ p nat f uS n) Hn)
+  end.
+Defined.
 
 Inductive bool_ {p : ℙ} :=
 | true_ : bool_
@@ -691,11 +695,29 @@ Proof.
 refine (mkel natᶠ (fun q α => lift_nat₀ n) (fun q α => lift_natε _)).
 Defined.
 
-Definition purify {p} (f : @El p (Arr natᶠ boolᶠ)) (n : nat) : bool.
+Definition proj_nat {p} (n : @El p natᶠ) : nat :=
+  nat_elim_in p (fun _ => nat) O (fun _ n => S n) n.
+
+(* Hack not to have to define a nat recursor into SProp *)
+Inductive Box (A : SProp) : Type := box : A -> Box A.
+
+Lemma lift_proj_nat :
+  forall p n, @lift_nat p (proj_nat n) ≡ n.
 Proof.
-pose (b := appᶠ f (lift_nat n)).
-destruct (b.(el₀) p !); [left|right].
+intros p n.
+match goal with [ |- ?P ] => cut (Box P) end.
+{ intros [x]; exact x. }
+revert n; refine (nat_elim_in _ _ _ _); constructor.
++ reflexivity.
++ destruct X as [[]].
+  reflexivity.
 Defined.
+
+Definition purify {p} (f : @El p (Arr natᶠ boolᶠ)) (n : nat) : bool :=
+match (appᶠ f (lift_nat n)).(el₀) p ! with
+| true_ => true
+| false_ => false
+end.
 
 Definition local {p}
   (f : @El p (Arr natᶠ boolᶠ))
@@ -827,6 +849,14 @@ destruct sr; reflexivity.
 Qed.
  *)
 
+Lemma isTrue_inf_r : forall p q n, isTrue (q n) -> isTrue ((inf p q) n).
+Proof.
+intros p q n Hq.
+unfold inf.
+destruct Hq.
+destruct (p n); constructor.
+Defined.
+
 Lemma local_to_E {p}
   (f : @El p (Arr natᶠ boolᶠ))
   (e : @El p (sumᶠ E
@@ -841,7 +871,32 @@ destruct (el₀ e p !) as [exn|v]; clear e.
   change (@El p natᶠ) in n.
   unshelve refine (mkEl _ _ _ _); [|refine (fun q α r β => sI)].
   refine (fun q α r β => _); cbn.
-Abort.
+  exists (proj_nat n); apply β.
+  apply isTrue_inf_r.
+  clear - Hn.
+  unfold purify.
+  assert (Hrw := lift_proj_nat _ n).
+  apply seq_sym in Hrw; destruct Hrw.
+  apply el₀ in Hn.
+  specialize (Hn p !).
+  cbn in *.
+  let T := type of Hn in
+  match T with eq_ _ ?X ?Y => assert (Hrw : (X.(el₀) p !) ≡ (Y.(el₀) p !)) end.
+  { destruct Hn; reflexivity. }
+  clear - Hrw; cbn in *.
+  change (el₀ f p ! (! ∗ n) ≡ true_) in Hrw.
+  apply seq_sym in Hrw.
+  refine (match Hrw in _ ≡ z return isTrue (match z with true_ => true | false_ => false end) with srefl _ => _ end).
+  constructor.
+Defined.
 
+Lemma local_of_sig {p}
+  (P : @El p (Arr natᶠ Typeᶠ))
+  (f : @El p (Arr natᶠ boolᶠ))
+  (v : @El p (local f (sigᶠ natᶠ P)))
+:
+  @El p (sigᶠ natᶠ (@lamᶠ _ natᶠ Typeᶠ (fun q α n => @appᶠ q natᶠ Typeᶠ (α ∗ P) n))).
+Proof.
+Admitted.
 
 End MP.
