@@ -12,4 +12,7 @@
 *.mllib
 *.native
 *.bak
+*.vos
+*.vok
+*.aux
 Makefile.coq
