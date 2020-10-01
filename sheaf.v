@@ -2,6 +2,10 @@ Axiom funext : forall A (B : A -> Type) (f g : forall x, B x),
   (forall x, f x = g x) -> f = g.
 Axiom pi : forall (A : Prop) (p q : A), p = q.
 
+Definition proof {A : Prop} {x : A} : A := x.
+
+Ltac hide := refine (@proof _ _).
+
 Set Primitive Projections.
 
 Record cat := {
@@ -70,14 +74,14 @@ unshelve econstructor.
 + refine (fun p => nat A B p).
 + unshelve refine (fun p q α f => Build_nat _ _ _ _ _ _).
   - refine (fun r β x => f.(nat_fun) _ (β ∘ α) x).
-  - intros r s β γ x; cbn in *.
+  - hide; intros r s β γ x; cbn in *.
     rewrite cat_cmp_cmp.
     apply (f.(nat_nat)).
-+ cbn; intros p [f Hf].
++ hide. cbn; intros p [f Hf].
   apply nat_fun_eq; cbn.
   apply funext; intros q; apply funext; intros α; apply funext; intros x.
   rewrite cat_cmp_r; reflexivity.
-+ intros p q r α β [f Hf]; cbn in *. 
++ hide. intros p q r α β [f Hf]; cbn in *. 
   apply nat_fun_eq; cbn.
   apply funext; intros s; apply funext; intros γ; apply funext; intros x.
   rewrite cat_cmp_cmp; reflexivity.
@@ -93,35 +97,41 @@ unshelve econstructor.
 Defined.
 
 Record site (ℙ : cat) := {
-  ste_idx : ℙ -> Type;
-  ste_obj : forall p (i : ste_idx p), ℙ;
-  ste_hom : forall p (i : ste_idx p), ℙ (ste_obj p i) p;
-  ste_map : forall p q (α : ℙ q p) (j : ste_idx q), ste_idx p;
-  ste_ftr : forall p q (α : ℙ q p) (j : ste_idx q),
-    ℙ (ste_obj q j) (ste_obj p (ste_map p q α j));
-  ste_eqn : forall p q (α : ℙ q p) j,
-    ste_hom q j ∘ α = ste_ftr p q α j ∘ ste_hom p (ste_map p q α j);
+  ste_fam : ℙ -> Type;
+  ste_idx : forall (p : ℙ), ste_fam p -> Type;
+  ste_obj : forall p f (i : ste_idx p f), ℙ;
+  ste_hom : forall p f (i : ste_idx p f), ℙ (ste_obj p f i) p;
+  ste_fun : forall p q (α : ℙ q p), ste_fam p -> ste_fam q;
+  ste_map : forall p q (α : ℙ q p) f (j : ste_idx q (ste_fun _ _ α f)), ste_idx p f;
+  ste_ftr : forall p q (α : ℙ q p) f (j : ste_idx q (ste_fun _ _ α f)),
+    ℙ (ste_obj q (ste_fun p q α f) j) (ste_obj p f (ste_map p q α f j));
+  ste_eqn : forall p q (α : ℙ q p) (f : ste_fam p) j,
+    ste_hom q (ste_fun p q α f) j ∘ α = ste_ftr p q α f j ∘ ste_hom p f (ste_map p q α f j);
 }.
 
+Arguments ste_fam {_}.
 Arguments ste_idx {_}.
 Arguments ste_obj {_}.
 Arguments ste_hom {_}.
+Arguments ste_fun {_} _ {_ _}.
+Arguments ste_map {_} _ {_ _}.
+Arguments ste_ftr {_} _ {_ _}.
 
 Definition compatible {ℙ : cat} (A : psh ℙ) (J : site ℙ)
-  {p} (s : forall (i : ste_idx J p), A (ste_obj J p i)) :=
-  forall (i₁ i₂ : ste_idx J p) q
-      (α₁ : ℙ q (ste_obj J p i₁))
-      (α₂ : ℙ q (ste_obj J p i₂)),
-      α₁ ∘ ste_hom J p i₁ = α₂ ∘ ste_hom J p i₂ ->
+  {p} (f : ste_fam J p) (s : forall (i : ste_idx J p f), A (ste_obj J p f i)) :=
+  forall (i₁ i₂ : ste_idx J p f) q
+      (α₁ : ℙ q (ste_obj J p f i₁))
+      (α₂ : ℙ q (ste_obj J p f i₂)),
+      α₁ ∘ ste_hom J p f i₁ = α₂ ∘ ste_hom J p f i₂ ->
       θ A α₁ (s i₁) = θ A α₂ (s i₂).
 
 Record isSheaf {ℙ : cat} (A : psh ℙ) (J : site ℙ) := {
-  shf_elt : forall (p : ℙ)
-    (s : forall (i : ste_idx J p), A (ste_obj J p i)), compatible A J s -> A p;
-  shf_spc : forall p s sc (i : ste_idx J p),
-    θ A (ste_hom J p i) (shf_elt p s sc) = s i;
-  shf_unq : forall p s sc (x : A p), (forall i, θ A (ste_hom J p i) x = s i) ->
-    x = shf_elt p s sc;
+  shf_elt : forall (p : ℙ) (f : ste_fam J p)
+    (s : forall (i : ste_idx J p f), A (ste_obj J p f i)), compatible A J f s -> A p;
+  shf_spc : forall p (f : ste_fam J p) s sc (i : ste_idx J p f),
+    θ A (ste_hom J p f i) (shf_elt p f s sc) = s i;
+  shf_unq : forall p f s sc (x : A p), (forall i, θ A (ste_hom J p f i) x = s i) ->
+    x = shf_elt p f s sc;
 }.
 
 Lemma isSheaf_hProp : forall (ℙ : cat) (A : psh ℙ) (J : site ℙ)
@@ -129,7 +139,7 @@ Lemma isSheaf_hProp : forall (ℙ : cat) (A : psh ℙ) (J : site ℙ)
 Proof.
 intros ℙ A J [e₁ s₁ u₁] [e₂ s₂ u₂].
 assert (rw : e₁ = e₂).
-{ apply funext; intros p; apply funext; intros s; apply funext; intros Hs.
+{ apply funext; intros p; apply funext; intros f; apply funext; intros s; apply funext; intros Hs.
   apply u₂; intros i.
   apply s₁. }
 destruct rw.
@@ -140,12 +150,14 @@ Qed.
 
 Definition site_id (ℙ : cat) : site ℙ.
 Proof.
-unshelve refine (Build_site _ _ _ _ _ _ _).
+unshelve refine (Build_site _ _ _ _ _ _ _ _ _).
 + refine (fun _ => unit).
-+ refine (fun p _ => p).
-+ refine (fun p _ => id p).
++ refine (fun _ _ => unit).
++ refine (fun p _ _ => p).
++ refine (fun p _ _ => id p).
 + constructor.
-+ refine (fun p q α i => α).
++ constructor.
++ refine (fun p q α f i => α).
 + cbn; intros.
   rewrite cat_cmp_l, cat_cmp_r; reflexivity.
 Defined.
@@ -153,29 +165,29 @@ Defined.
 Lemma id_sheaf : forall ℙ (A : psh ℙ), isSheaf A (site_id ℙ).
 Proof.
 intros ℙ A. unshelve econstructor; cbn.
-+ intros p s sc; apply (s tt).
-+ cbn; intros p s sc [].
++ intros p f s sc; apply (s tt).
++ cbn; intros p f s sc [].
   rewrite psh_mon_id; reflexivity.
-+ cbn; intros p s sc x Hx.
++ cbn; intros p f s sc x Hx.
   rewrite <- Hx, psh_mon_id; reflexivity.
 Defined.
 
 Lemma Arr_sheaf_compatible : forall (ℙ : cat) (A B : psh ℙ) (J : site ℙ),
   isSheaf B J ->
-  forall (p : ℙ) (s : forall i : ste_idx J p, Arr A B (ste_obj J p i)),
-  compatible (Arr A B) J s ->
+  forall (p : ℙ) f (s : forall i : ste_idx J p f, Arr A B (ste_obj J p f i)),
+  compatible (Arr A B) J f s ->
   forall (q : ℙ) (α : ℙ q p) (x : A q),
-  compatible B J
-    (fun i : ste_idx J q =>
-     nat_fun (s (ste_map _ J p q α i)) (ste_obj J q i)
-       (ste_ftr _ J p q α i) (θ A (ste_hom J q i) x)).
+  compatible B J (ste_fun J α f)
+    (fun i : ste_idx J q _ =>
+     nat_fun (s (ste_map J α f i)) (ste_obj J q _ i)
+       (ste_ftr J α f i) (θ A (ste_hom J q _ i) x)).
 Proof.
-intros ℙ A B J HB p s Hs q α x i₁ i₂ r α₁ α₂ e.
-rewrite (nat_nat (s (ste_map _ J p q α i₁))).
-rewrite (nat_nat (s (ste_map _ J p q α i₂))).
+intros ℙ A B J HB p f s Hs q α x i₁ i₂ r α₁ α₂ e.
+rewrite (nat_nat (s (ste_map J α f i₁))).
+rewrite (nat_nat (s (ste_map J α f i₂))).
 rewrite <- !psh_mon_cmp, e.
-pose (β₁ := J.(ste_ftr _) _ _ α i₁).
-pose (β₂ := J.(ste_ftr _) _ _ α i₂).
+pose (β₁ := J.(ste_ftr) α f i₁).
+pose (β₂ := J.(ste_ftr) α f i₂).
 unshelve refine (let Hs' := Hs _ _ _ (α₁ ∘ β₁) (α₂ ∘ β₂) _ in _).
 { rewrite !cat_cmp_cmp; unfold β₁, β₂.
 rewrite <- !ste_eqn; rewrite <- !cat_cmp_cmp; f_equal.
@@ -184,7 +196,7 @@ clearbody Hs'.
 apply eq_nat_fun in Hs'; cbn in Hs'.
 apply (f_equal (fun f => f r)) in Hs'.
 apply (f_equal (fun f => f (id r))) in Hs'.
-apply (f_equal (fun f => f ((θ A (α₂ ∘ ste_hom J q i₂) x)))) in Hs'.
+apply (f_equal (fun f => f ((θ A (α₂ ∘ ste_hom J q _ i₂) x)))) in Hs'.
 rewrite !cat_cmp_l in Hs'.
 apply Hs'.
 Qed.
@@ -193,11 +205,11 @@ Lemma Arr_sheaf : forall ℙ (A B : psh ℙ) J, isSheaf B J -> isSheaf (Arr A B)
 Proof.
 intros ℙ A B J HB.
 unshelve econstructor.
-+ intros p c Hc. unshelve econstructor.
++ intros p f c Hc. unshelve econstructor.
   - intros q α x.
-    unshelve refine (HB.(shf_elt _ _) _ _ _).
-    * unshelve refine (fun i => nat_fun (c (J.(ste_map _) p q α i)) (ste_obj J q i) _ (θ A (J.(ste_hom) q i) x)).
-      refine (J.(ste_ftr _) _ _ _ _).
+    unshelve refine (HB.(shf_elt _ _) _ (ste_fun J α f) _ _).
+    * unshelve refine (fun i => nat_fun (c (J.(ste_map) α _ i)) (ste_obj J q _ i) _ (θ A (J.(ste_hom) q _ i) x)).
+      refine (J.(ste_ftr) _ _ _).
     * apply Arr_sheaf_compatible; assumption.
   - intros q r α β x; cbn.
     eapply shf_unq; intros i.
@@ -242,7 +254,9 @@ unshelve econstructor.
   rewrite ste_eqn.
   rewrite Hu; reflexivity.
 Defined.
+*)
 
+(*
 Module Cover.
 
 Record cover {ℙ} (A : psh ℙ) (J : site ℙ) (p : ℙ) := {
@@ -331,7 +345,7 @@ reflexivity.
 Qed.
 
 End Cover.
-
+*)
 
 Record pfs (ℙ : cat) := {
   pfs_obj : ℙ -> Type;
@@ -373,6 +387,23 @@ unshelve refine (Build_pEl _ _ _ _ _).
   - apply funext; intros s; apply funext; intros γ; rewrite cat_cmp_cmp; reflexivity.
 Defined.
 
+Lemma pEl_eq : forall ℙ A p (x y : @pEl ℙ A p),
+  (forall q α, x.(pel_elt) q α = y.(pel_elt) q α) -> x = y.
+Proof.
+intros ℙ A p [x xε] [y yε] e; cbn in *.
+assert (rw : x = y).
+{ apply funext; intros; apply funext; intros; apply e. }
+destruct rw.
+replace xε with yε by apply pi; reflexivity.
+Qed.
+
+Lemma pEl_eq_rev : forall ℙ A p (x y : @pEl ℙ A p) q α,
+  x = y -> x.(pel_elt) q α = y.(pel_elt) q α.
+Proof.
+intros.
+destruct H; reflexivity.
+Qed.
+
 Definition to_psh {ℙ} (A : pfs ℙ) : psh ℙ.
 Proof.
 unshelve econstructor.
@@ -385,56 +416,140 @@ unshelve econstructor.
   rewrite cat_cmp_cmp; reflexivity.
 Defined.
 
+Definition of_psh {ℙ} (A : psh ℙ) : pfs ℙ.
+Proof.
+unshelve econstructor.
++ refine A.
++ refine (fun p x => forall q (α : ℙ q p), x q α = θ A α (x p (id p))).
+Defined.
+
+(** simple inlining of compatible (to_psh _) *)
+Definition __compatible {ℙ : cat} (A : pfs ℙ) (J : site ℙ) {p : ℙ} (f : ste_fam J p)
+    (s : forall i : ste_idx J p f, to_psh A (ste_obj J p f i)) :=
+  forall (i₁ i₂ : ste_idx J p f) (q : ℙ) (α₁ : ℙ q (ste_obj J p f i₁))
+    (α₂ : ℙ q (ste_obj J p f i₂)),
+  α₁ ∘ ste_hom J p f i₁ = α₂ ∘ ste_hom J p f i₂ ->
+  lift_pEl α₁ (s i₁) = lift_pEl α₂ (s i₂).
+
+(** simple inlining of isSheaf (to_psh _) *)
+Record __isSheaf (ℙ : cat) (A : pfs ℙ) (J : site ℙ) : Type := __Build_isSheaf
+  { __shf_elt : forall (p : ℙ) (f : ste_fam J p)
+                (s : forall i : ste_idx J p f, pEl A (ste_obj J p f i)),
+              __compatible A J f s -> pEl A p;
+    __shf_spc : forall (p : ℙ) (f : ste_fam J p)
+                (s : forall i : ste_idx J p f, pEl A (ste_obj J p f i))
+                (sc : __compatible A J f s) (i : ste_idx J p f),
+              lift_pEl (ste_hom J p f i) (__shf_elt p f s sc) = s i;
+    __shf_unq : forall (p : ℙ) (f : ste_fam J p)
+                (s : forall x : ste_idx J p f, pEl A (ste_obj J p f x))
+                (sc : __compatible A J f s) (x : pEl A p),
+              (forall i : ste_idx J p f, lift_pEl (ste_hom J p f i) x = s i) ->
+              x = __shf_elt p f s sc }.
+
 Definition pfs_compatible {ℙ : cat} (A : pfs ℙ) (J : site ℙ)
-  {p}
-  (s : forall (i : ste_idx J p) q (α : ℙ q (ste_obj J p i)), A q)
-  (sε : forall (i : ste_idx J p) q (α : ℙ q (ste_obj J p i)),
+  {p} (f : ste_fam J p)
+  (s : forall (i : ste_idx J p f) q (α : ℙ q (ste_obj J p f i)), A q)
+  (sε : forall (i : ste_idx J p f) q (α : ℙ q (ste_obj J p f i)),
       A.(pfs_rlz) q (fun r β => s i _ (β ∘ α)))
   :=
-  forall (i₁ i₂ : ste_idx J p) q
-      (α₁ : ℙ q (ste_obj J p i₁))
-      (α₂ : ℙ q (ste_obj J p i₂)),
-      α₁ ∘ ste_hom J p i₁ = α₂ ∘ ste_hom J p i₂ ->
+  forall (i₁ i₂ : ste_idx J p f) q
+      (α₁ : ℙ q (ste_obj J p f i₁))
+      (α₂ : ℙ q (ste_obj J p f i₂)),
+      α₁ ∘ ste_hom J p f i₁ = α₂ ∘ ste_hom J p f i₂ ->
       s i₁ q α₁ = s i₂ q α₂.
 
-Record isFascist {ℙ : cat} (A : pfs ℙ) (J : site ℙ) (p : ℙ) := {
-  fsc_elt : forall s sε (sc : @pfs_compatible _ A J p s sε) q (α : ℙ q p), A q;
-  fsc_rlz : forall s sε (sc : @pfs_compatible _ A J p s sε),
-    forall q (α : ℙ q p), A.(pfs_rlz) q (fun r β => fsc_elt s sε sc r (β ∘ α));
-  fsc_spc : forall s sε sc (i : ste_idx J p) q (α : ℙ q _),
-    fsc_elt s sε sc q (α ∘ ste_hom J p i) = s i q α;
-  fsc_unq : forall s sε sc (x : pEl A p),
-    (forall i q (α : ℙ q _),
-      x.(pel_elt) q (α ∘ ste_hom J p i) = s i q α) ->
-    forall q (α : ℙ q p),
-    x.(pel_elt) q α = fsc_elt s sε sc q α;
-}.
-
-(*
 Record isFascist {ℙ : cat} (A : pfs ℙ) (J : site ℙ) := {
-  fsc_elt : forall (p : ℙ) s sε (sc : @pfs_compatible _ A J p s sε) q (α : ℙ q p), A q;
-  fsc_rlz : forall (p : ℙ) s sε (sc : @pfs_compatible _ A J p s sε),
-    forall q (α : ℙ q p), A.(pfs_rlz) q (fun r β => fsc_elt p s sε sc r (β ∘ α));
-  fsc_spc : forall p s sε sc (i : ste_idx J p) q (α : ℙ q _),
-    fsc_elt p s sε sc q (α ∘ ste_hom J p i) = s i q α;
-  fsc_unq : forall p s sε sc (x : pEl A p),
+  fsc_elt : forall (p : ℙ) (f : ste_fam J p) s sε (sc : @pfs_compatible _ A J p f s sε) q (α : ℙ q p), A q;
+  fsc_rlz : forall (p : ℙ) (f : ste_fam J p) s sε (sc : @pfs_compatible _ A J p f s sε),
+    forall q (α : ℙ q p), A.(pfs_rlz) q (fun r β => fsc_elt p f s sε sc r (β ∘ α));
+  fsc_spc : forall p f s sε sc (i : ste_idx J p f) q (α : ℙ q (ste_obj J p f i)),
+    fsc_elt p f s sε sc q (α ∘ ste_hom J p f i) = s i q α;
+  fsc_unq : forall p f s sε sc (x : pEl A p),
     (forall i q (α : ℙ q _),
-      x.(pel_elt) q (α ∘ ste_hom J p i) = s i q α) ->
+      x.(pel_elt) q (α ∘ ste_hom J p f i) = s i q α) ->
     forall q (α : ℙ q p),
-    x.(pel_elt) q α = fsc_elt p s sε sc q α;
+    x.(pel_elt) q α = fsc_elt p f s sε sc q α;
 }.
-*)
-(*
-Lemma isSheaf_isFascist : forall ℙ (A : pfs ℙ) (J : site ℙ),
-  isFascist A J -> isSheaf (to_psh A) J.
-Proof.
-intros ℙ A J HA.
-unshelve econstructor.
-+ intros p c Hc.
-  unshelve econstructor.
-  -   
 
-*)
+Lemma isFascist_hProp : forall ℙ A J (f₁ f₂ : @isFascist ℙ A J), f₁ = f₂.
+Proof.
+intros ℙ A J [f₁ fε₁ s₁ u₁ ] [f₂ fε₂ s₂ u₂].
+assert (rw : f₁ = f₂).
+{
+  apply funext; intros p; apply funext; intros f; apply funext; intros s; apply funext; intros sε; apply funext; intros Hs.
+  refine (let x₁ := Build_pEl _ A _ (f₁ p f s sε Hs) (fε₁ p f s sε Hs) in _).
+  apply funext; intros q; apply funext; intros α.
+  rewrite <- (u₂ p f _ _ _ x₁ (s₁ _ _ _ _ _) q α).
+  reflexivity.
+}
+destruct rw.
+replace fε₂ with fε₁ by apply pi.
+replace s₂ with s₁ by apply pi.
+replace u₂ with u₁ by apply pi.
+reflexivity.
+Qed.
+
+Lemma isFascist_Sheaf :
+  forall ℙ (J : site ℙ) A, isFascist A J -> isSheaf (to_psh A) J.
+Proof.
+intros ℙ J A [f fε e u].
+unshelve econstructor.
++ refine (fun p ff s Hs => _).
+  unshelve econstructor.
+  - unshelve refine (fun q α => f _ _ _ _ _ q α).
+    { exact ff. }
+    { refine (fun i => (s i).(pel_elt)). }
+    { refine (fun i => (s i).(pel_rlz)). }
+    { refine (fun i₁ i₂ r β₁ β₂ rw => _).
+      specialize (Hs i₁ i₂ r β₁ β₂ rw).
+      cbn in Hs.
+      assert (rw' := pEl_eq_rev _ _ _ _ _ r (id _) Hs).
+      replace β₁ with (id _ ∘ β₁) by apply cat_cmp_l.
+      replace β₂ with (id _ ∘ β₂) by apply cat_cmp_l.
+      apply (pEl_eq_rev _ _ _ _ _ r (id _) Hs).
+    }
+  - intros q α; cbn.
+    apply fε.
++ intros p ff s sc i.
+  apply pEl_eq; intros q α; cbn.
+  apply e.
++ intros p ff s sc x Hx; cbn.
+  apply pEl_eq; cbn; intros q α.
+  apply u.
+  intros i r β.
+  specialize (Hx i).
+  cbn in Hx.
+  apply (pEl_eq_rev _ _ _ _ _ r β Hx).
+Defined.
+
+Lemma isSheaf_Fascist :
+  forall ℙ (J : site ℙ) A, isSheaf A J -> isFascist (of_psh A) J.
+Proof.
+intros ℙ J A [e r u].
+unshelve econstructor.
++ intros p f s sε sc q α.
+  refine (θ A α _).
+  unshelve refine (e _ _ (fun i => s i _ (id _ ∘ id _)) _).
+  clear - sc; intros i₁ i₂ q α₁ α₂ e.
+  specialize (sc i₁ i₂ q α₁ α₂ e).
+  cbn in sε.
+  rewrite <- !sε, !cat_cmp_r; apply sc.
++ intros p f s sε sc q α w β; cbn.
+  rewrite <- psh_mon_cmp, cat_cmp_l.
+  f_equal.
++ intros p f s sε sc i q α; cbn.
+  rewrite psh_mon_cmp, r.
+  rewrite <- sε, cat_cmp_r; reflexivity.
++ intros p f s sε sc [x xε] Hx q α; cbn.
+  cbn in *.
+  rewrite <- (cat_cmp_r _ _ _ α), xε, (cat_cmp_r _ _ _ α).
+  rewrite cat_cmp_l; f_equal.
+  apply u; intros i.
+  rewrite <- Hx.
+  rewrite !cat_cmp_l.
+  rewrite <- (cat_cmp_l _ _ _ (id _)), <- xε, cat_cmp_r.
+  reflexivity.
+Defined.
 
 Module PreList.
 
