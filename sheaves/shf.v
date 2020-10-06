@@ -21,9 +21,33 @@ Record isSheaf (J : site) (A : Type) := {
 Arguments shf_elt {_ _}.
 Arguments shf_spc {_ _}.
 
+Record isSheaf' (J : site) (A : Type) := {
+  shf_elt' : forall P : Prop, J P -> (P -> A) -> A;
+  shf_spc' : forall P (i : J P) (x : A), x = shf_elt' P i (fun _ => x);
+}.
+
 Axiom funext : forall A (B : A -> Type) (f g : forall x, B x),
   (forall x, f x = g x) -> f = g.
 Axiom pi : forall (A : Prop) (p q : A), p = q.
+
+Lemma is_Sheaf_Sheaf' : forall J A, isSheaf' J A -> isSheaf J A.
+Proof.
+intros J A hA.
+unshelve econstructor.
++ refine (fun P i x₀ => hA.(shf_elt' _ _) P i x₀).
++ cbn; intros P i x₀ x hx.
+  rewrite (shf_spc' _ _ hA P i x).
+  f_equal; apply funext; apply hx.
+Defined.
+
+Lemma is_Sheaf'_Sheaf : forall J A, isSheaf J A -> isSheaf' J A.
+Proof.
+intros J A hA.
+unshelve econstructor.
++ refine (fun P i x₀ => hA.(shf_elt) P i x₀).
++ cbn; intros P i x.
+  apply shf_spc; constructor.
+Defined.
 
 (** Closure under products *)
 
@@ -36,6 +60,17 @@ unshelve econstructor.
 + intros P i c f hf.
   (** needs funext *)
   apply funext; intros x.
+  apply (Bε x).
+  intros p; rewrite (hf p); reflexivity.
+Defined.
+
+Lemma Prod_isSheaf' : forall (J : site) (A : Type) (B : A -> Type),
+  (forall x, isSheaf' J (B x)) -> isSheaf' J (forall x, B x).
+Proof.
+intros J A B Bε.
+unshelve econstructor.
++ refine (fun P i f x => (Bε x).(shf_elt' _ _) P i (fun p => f p x)).
++ intros P i f; cbn.
   apply (Bε x).
   intros p; rewrite (hf p); reflexivity.
 Defined.
@@ -80,6 +115,15 @@ unshelve refine (Q_rect (fun x => forall y, (forall p : P, x = c p) -> (forall p
   -
 Abort.
 
+Definition bind {J A B} : Q J A -> (A -> Q J B) -> Q J B.
+Proof.
+intros x f.
+revert x.
+unshelve refine (Q_rect _ _ _).
++ intros P i φ.
+  apply f.
+  apply φ.
+
 Lemma isSheaf_Q : forall J (A : Type), isSheaf J (Q J (Q J A)).
 Proof.
 intros J A.
@@ -88,7 +132,9 @@ unshelve econstructor.
   unshelve refine (qc P i (fun p => _)).
   specialize (φ p).
   revert φ.
+  clear.
   unshelve refine (Q_rect _ _ _).
   - intros R j ψ.
-    unshelve refine (qc P i _).
+    unshelve refine (qc R j _).
+    
 Abort.
