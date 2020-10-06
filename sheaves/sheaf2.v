@@ -60,6 +60,9 @@ Record Hom {ℙ} (A B : psh ℙ) := {
     hom_fun q (θ A α x) = θ B α (hom_fun p x);
 }.
 
+Arguments hom_fun {_ _ _}.
+Arguments hom_nat {_ _ _}.
+
 Record nat {ℙ : cat} (A B : psh ℙ) (p : ℙ) := {
   nat_fun : forall q (α : ℙ q p), A q -> B q; 
   nat_nat : forall q r (α : ℙ q p) (β : ℙ r q) (x : A q),
@@ -221,12 +224,12 @@ Record isSheaf {ℙ : cat} (A : psh ℙ) (J : site ℙ) := {
   shf_spc : forall p (s : sieve p) (hs : J.(ste_sve) s) (c : cover A s),
     forall q (α : ℙ q p) (hα : α ∈ s),
       θ A α (shf_elt p s hs c) = c.(cov_fun) α hα;
-  (** ⊢ Π (s : Prop) (i : J s) (c : s → A) (p : s), φ s i c = c s *)
+  (** ⊢ Π (s : Prop) (i : J s) (c : s → A) (p : s), φ s i c = c p *)
   shf_unq :
     forall (p : ℙ) (s : sieve p) (hs : J.(ste_sve) s) (c : cover A s) (x : A p),
       (forall q (α : ℙ q p) (hα : α ∈ s), θ A α x = c.(cov_fun) α hα) ->
       x = shf_elt p s hs c;
-  (** ⊢ Π (s : Prop) (i : J s) (c : s → A) (x : A), (Π (p : s), x = c s) → x = φ s i c *)
+  (** ⊢ Π (s : Prop) (i : J s) (c : s → A) (x : A), (Π (p : s), x = c p) → x = φ s i c *)
 }.
 
 Arguments shf_elt {_ _ _}.
@@ -235,82 +238,76 @@ Arguments shf_unq {_ _ _}.
 
 Axiom admit : False.
 
-Definition F {ℙ} (A : psh ℙ) (J : site ℙ) p (s : sieve p) (c : cover A s) := True.
+(* Σ (P : Prop), J P × (P → A) *)
+Record T_obj {ℙ} (A : psh ℙ) (J : site ℙ) (p : ℙ) := {
+  tup_sve : sieve p;
+  tup_mod : J.(ste_sve) tup_sve;
+  tup_cov : cover A tup_sve;
+}.
 
-(* Σ (P : Prop), J P × Σ (x₀ : P → A), Π x : A, Π (p : P), x₀ p = x *)
 Definition T {ℙ} (A : psh ℙ) (J : site ℙ) : psh ℙ.
 Proof.
 unshelve econstructor.
 + intro p.
-  refine (@sigT (sieve p) (fun s => prod (J.(ste_sve) s) _)).
-  refine (@sigT (cover A s) (fun c => _)).
-  refine (F A J p s c).
-+ cbn; intros p q α [s [j [c f]]].
-  exists (sieve_mon s α); split; [|unshelve econstructor].
+  refine (T_obj A J p).
++ cbn; intros p q α [s j c].
+  exists (sieve_mon s α).
   - apply ste_mon, j.
   - apply cover_mon, c.
-  - elim admit.
-+ cbn. intros p [s [j [c f]]].
++ cbn. intros p [s j c].
   elim admit.
-+ cbn. intros p q r α β [s [j [c f]]].
-  elim admit.
-Defined.
-
-(*
-(* Σ (P : Prop), J P × (P → A) *)
-Definition TTT {ℙ} (A : psh ℙ) (J : site ℙ) : psh ℙ.
-Proof.
-unshelve econstructor.
-+ intro p.
-  refine (@sigT (sieve p) (fun s => prod (J.(ste_sve) s) (cover A s))).
-+ cbn; intros p q α [s [j f]].
-  exists (sieve_mon s α); split.
-  - apply ste_mon, j.
-  - apply cover_mon, f.
-+ cbn; intros p [s [j f]]; cbn.
-  elim admit.
-+ cbn; intros p q r α β [s [j f]].
++ cbn. intros p q r α β [s j c].
   elim admit.
 Defined.
-
-Lemma shf_elt_int {ℙ : cat} (A : psh ℙ) (J : site ℙ) (hA : isSheaf A J) :
-  Elt (Arr (TTT A J) A).
-Proof.
-unshelve econstructor; cbn.
-+ intros p.
-  unshelve econstructor.
-  - intros q α [s [j f]].
-    apply (shf_elt hA _ s j f).
-  - intros q r α β [s [j f]]; cbn.
-    apply shf_unq; intros t γ hγ.
-    rewrite <- psh_mon_cmp.
-    assert (e := shf_spc hA _ s j f _ (γ ∘ β) hγ).
-    rewrite e; clear e.
-    reflexivity.
-+ intros p q α; cbn.
-  apply nat_fun_eq; cbn.
-  apply funext; intros r; apply funext; intros β.
-  apply funext; intros [x [j f]]; reflexivity.
-Defined.
-*)
 
 Lemma shf_elt_rev {ℙ : cat} (A : psh ℙ) (J : site ℙ) :
-  Hom (T A J) A ->
+  forall (φ : Hom (T A J) A),
+  (** ⊢ Π (s : Prop) (i : J s) (c : s → A) (x : A), (Π (p : s), x = c p) → x = φ s i c *)
+  (forall (p : ℙ) (s : sieve p) (i : J.(ste_sve) s) (c : cover A s) (x : A p),
+      (forall q (α : ℙ q p) (hα : α ∈ s),
+        θ A α x = c.(cov_fun) α hα) ->
+          x = φ.(hom_fun) p (Build_T_obj _ _ _ _ s i c)) ->
   isSheaf A J.
 Proof.
-intros f.
+intros φ Hφ.
 unshelve econstructor.
 + intros p s i c.
-  refine (hom_fun _ _ f p _).
-  exists s.
-  refine (i, _).
-  exists c.
-  elim admit.
+  refine (hom_fun φ p _).
+  refine (Build_T_obj _ _ _ _ s i c).
 + refine (fun p s i c q α hα => _); cbn.
-  rewrite <- hom_nat.
-admit.
-+ intros p s hs c x hx.
-cbn.
+  rewrite <- hom_nat; cbn.
+  symmetry; apply Hφ.
+  intros r β hβ; cbn in *.
+  rewrite cov_cmp; f_equal; apply pi.
++ intros p s i c x e; cbn.
+  apply Hφ, e.
+Defined.
+
+Lemma shf_elt_fun {ℙ : cat} (A : psh ℙ) (J : site ℙ) (hA : isSheaf A J) :
+  Hom (T A J) A.
+Proof.
+unshelve econstructor; cbn.
++ intros p [s i c].
+  apply (shf_elt hA _ s i c).
++ intros p q α [s i c]; cbn.
+  symmetry; apply shf_unq.
+  intros r β hβ.
+  rewrite <- psh_mon_cmp.
+  assert (e := shf_spc hA _ s i c _ (β ∘ α) hβ).
+  rewrite e; clear e.
+  reflexivity.
+Defined.
+
+Lemma shf_elt_spc {ℙ : cat} (A : psh ℙ) (J : site ℙ) (hA : isSheaf A J) :
+  let φ := shf_elt_fun A J hA in
+  (forall (p : ℙ) (s : sieve p) (i : J.(ste_sve) s) (c : cover A s) (x : A p),
+      (forall q (α : ℙ q p) (hα : α ∈ s),
+        θ A α x = c.(cov_fun) α hα) ->
+          x = φ.(hom_fun) p (Build_T_obj _ _ _ _ s i c)).
+Proof.
+cbn; intros p s i c x e.
+apply shf_unq, e.
+Qed.
 
 Lemma isSheaf_hProp : forall (ℙ : cat) (A : psh ℙ) (J : site ℙ)
   (is₁ is₂ : isSheaf A J), is₁ = is₂.
@@ -325,6 +322,7 @@ assert (rw : s₁ = s₂) by apply pi; destruct rw.
 assert (rw : u₁ = u₂) by apply pi; destruct rw.
 reflexivity.
 Qed.
+
 
 Definition site_id (ℙ : cat) : site ℙ.
 Proof.
