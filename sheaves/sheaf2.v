@@ -2,16 +2,6 @@ Axiom funext : forall A (B : A -> Type) (f g : forall x, B x),
   (forall x, f x = g x) -> f = g.
 Axiom pi : forall (A : Prop) (p q : A), p = q.
 
-Lemma fapp : forall {A} (x : A) {B : A -> Type} (f g : forall x, B x),
-  f = g -> f x = g x.
-Proof.
-intros ? ? ? ? ? []; reflexivity.
-Qed.
-
-Definition proof {A : Prop} {x : A} : A := x.
-
-Ltac hide := refine (@proof _ _).
-
 Set Primitive Projections.
 
 Record cat := {
@@ -110,14 +100,14 @@ unshelve econstructor.
 + refine (fun p => nat A B p).
 + unshelve refine (fun p q α f => Build_nat _ _ _ _ _ _).
   - refine (fun r β x => f.(nat_fun) _ (β ∘ α) x).
-  - hide; intros r s β γ x; cbn in *.
+  - intros r s β γ x; cbn in *.
     rewrite cat_cmp_cmp.
     apply (f.(nat_nat)).
-+ hide. cbn; intros p [f Hf].
++ cbn; intros p [f Hf].
   apply nat_fun_eq; cbn.
   intros q α x.
   rewrite cat_cmp_r; reflexivity.
-+ hide. intros p q r α β [f Hf]; cbn in *. 
++ intros p q r α β [f Hf]; cbn in *. 
   apply nat_fun_eq; cbn.
   intros s γ x.
   rewrite cat_cmp_cmp; reflexivity.
@@ -132,6 +122,7 @@ unshelve econstructor.
 + reflexivity.
 Defined.
 
+(** Prop *)
 Record sieve {ℙ : cat} (p : ℙ) := {
   sve_fun : forall q (α : ℙ q p), Prop;
   sve_mon : forall q (α : ℙ q p) r (β : ℙ r q), sve_fun q α -> sve_fun r (β ∘ α);
@@ -141,6 +132,11 @@ Arguments sve_fun {_ _} _ {_}.
 Arguments sve_mon {_ _} _ {_} _ {_}.
 
 Notation "α ∈ s" := (sve_fun s α) (at level 10).
+
+Definition sieve_incl {ℙ} {p} (s s' : @sieve ℙ p) :=
+  forall q (α : ℙ q p), α ∈ s -> α ∈ s'.
+
+Notation "s ⊆ s'" := (sieve_incl s s') (at level 10).
 
 Definition sieve_top {ℙ : cat} {p : ℙ} : sieve p.
 Proof.
@@ -155,6 +151,13 @@ unshelve econstructor.
 + refine (fun r β => s.(sve_fun) (β ∘ α)).
 + cbn; intros r β t γ H.
   rewrite cat_cmp_cmp; apply sve_mon, H.
+Defined.
+
+Definition sieve_prod {ℙ : cat} {p} (s s' : @sieve ℙ p) : @sieve ℙ p.
+Proof.
+unshelve econstructor.
++ refine (fun q α => α ∈ s /\ α ∈ s').
++ cbn; intros q α r β [h h']; split; apply sve_mon; assumption.
 Defined.
 
 Lemma sieve_eq : forall {ℙ : cat} (p : ℙ) (s₁ s₂ : sieve p),
@@ -193,8 +196,8 @@ Record site (ℙ : cat) := {
   ste_mon : forall (p : ℙ) (s : sieve p) q (α : ℙ q p),
     ste_sve p s -> ste_sve q (sieve_mon s α);
   (** ⊢ J : Prop → Prop *)
-  ste_one : forall (p : ℙ), ste_sve p sieve_top;
-  (** ⊢ J 1 *)
+  ste_ret : forall (p : ℙ) (s : sieve p), (forall q (α : ℙ q p), α ∈ s) -> ste_sve p s;
+  (** ⊢ A → J A *)
   ste_cmp : forall (p : ℙ) (s s' : sieve p),
     ste_sve p s ->
     (forall q (α : ℙ q p), α ∈ s -> ste_sve q (sieve_mon s' α)) ->
@@ -204,6 +207,19 @@ Record site (ℙ : cat) := {
 
 Arguments ste_sve {_} _ {_}.
 Arguments ste_mon {_} _ {_} _ {_} _.
+
+Lemma site_prod {ℙ : cat} {J : site ℙ} {p} {s s' : sieve p}
+  (i : ste_sve J s) (j : ste_sve J s') : ste_sve J (sieve_prod s s').
+Proof.
+refine (ste_cmp _ _ _ s _ i _).
+intros q α hα.
+unshelve refine (ste_cmp _ _ _ (sieve_mon s' α) _ _ _).
++ apply ste_mon; assumption.
++ intros r β hβ; cbn in *.
+  apply ste_ret; intros t γ; cbn; split.
+  - apply sve_mon; assumption.
+  - rewrite cat_cmp_cmp; apply sve_mon; assumption.
+Qed.
 
 Record cover {ℙ : cat} (A : psh ℙ) {p} (s : sieve p) := {
   cov_fun : forall q (α : ℙ q p), α ∈ s -> A q;
@@ -265,6 +281,10 @@ Record T_obj {ℙ} (A : psh ℙ) (J : site ℙ) (p : ℙ) := {
   tup_mod : J.(ste_sve) tup_sve;
   tup_cov : cover A tup_sve;
 }.
+
+Arguments tup_sve {_ _ _ _}.
+Arguments tup_mod {_ _ _ _}.
+Arguments tup_cov {_ _ _ _}.
 
 Definition T {ℙ} (A : psh ℙ) (J : site ℙ) : psh ℙ.
 Proof.
@@ -366,12 +386,23 @@ cbn; intros p s i c x e.
 apply shf_unq, e.
 Qed.
 
+(** cover_η : A → (s → A) *)
 Definition cover_η {ℙ : cat} (A : psh ℙ) {p} (s : sieve p) (x : A p) : cover A s.
 Proof.
 unshelve econstructor.
 + refine (fun q α hα => θ A α x).
 + intros q α r β hα.
   cbn; rewrite psh_mon_cmp; reflexivity.
+Defined.
+
+(** cover_map : (s → A) → (s → s') → s' → A *)
+Definition cover_map {ℙ} {A : psh ℙ} {p} {s s' : sieve p} (c : cover A s') (f : s ⊆ s') : cover A s.
+Proof.
+unshelve econstructor.
++ intros q α hα.
+  refine (c.(cov_fun) α (f _ _ hα)).
++ intros q α r β hα; cbn.
+  rewrite cov_cmp; f_equal; apply pi.
 Defined.
 
 Lemma shf_elt_rev2 {ℙ : cat} (A : psh ℙ) (J : site ℙ) :
@@ -422,7 +453,7 @@ unshelve refine (Build_site _ _ _ _ _).
 + refine (fun p s => forall q (α : ℙ q p), s.(sve_fun) α).
 + cbn; intros p s q α hs r β.
   apply hs.
-+ constructor.
++ cbn; intros p s hs q α; apply hs.
 + cbn; intros p s s' hs f q α.
   specialize (f q α (hs q α) q (id _)).
   rewrite cat_cmp_l in f; apply f.
@@ -515,3 +546,227 @@ unshelve refine (shf_elt_rev2 _ _ _ _); [unshelve econstructor|].
   rewrite e, cat_cmp_l.
   apply fε.
 Defined.
+
+(** Let's assume quotients *)
+Axiom Quo : forall (A : Type) (R : A -> A -> Prop), Type.
+Axiom quo : forall {A} R (x : A), Quo A R.
+Axiom quo_eq : forall {A} {R : A -> A -> Prop} (x y : A) (e : R x y), quo R x = quo R y.
+
+Axiom quo_rect : forall {A} {R : A -> A -> Prop} (P : Quo A R -> Type)
+    (u : forall x : A, P (quo R x))
+    (uε : forall (x y : A) (r : R x y), match quo_eq x y r in _ = z return P z with eq_refl => u x end = u y),
+    forall q : Quo A R, P q.
+
+Axiom quo_rect_eq : forall A R P u uε (x : A), @quo_rect A R P u uε (quo R x) = u x.
+
+Definition quo_elim :
+  forall {A} {R : A -> A -> Prop} (P : Type)
+    (u : forall x : A, P)
+    (uε : forall (x y : A) (r : R x y), u x = u y),
+    forall q : Quo A R, P.
+Proof.
+intros A R P u uε.
+unshelve refine (quo_rect (fun _ => P) u _).
+intros x y r; destruct quo_eq; apply uε, r.
+Defined.
+
+Lemma quo_elim_eq : forall A R P u uε (x : A), @quo_elim A R P u uε (quo R x) = u x.
+Proof.
+intros A R P u uε x; unfold quo_elim.
+rewrite quo_rect_eq; reflexivity.
+Qed.
+
+Inductive clos {A} (R : A -> A -> Prop) : A -> A -> Prop :=
+| clos_incl : forall x y, R x y -> clos R x y
+| clos_refl : forall x, clos R x x
+| clos_trns : forall x y z, clos R x y -> clos R y z -> clos R x z
+| clos_symm : forall x y, clos R x y -> clos R y x.
+
+(*
+Lemma quo_eqr : forall {A} {R} (x y : A), clos R x y -> quo R x = quo R y.
+Proof.
+induction 1.
++ apply quo_eq; assumption.
++ reflexivity.
++ transitivity (quo R y); assumption.
++ symmetry; assumption.
+Qed.
+
+Lemma quo_rectr :
+  forall {A} {R : A -> A -> Prop} (P : Quo A R -> Type)
+    (u : forall x : A, P (quo R x))
+    (uε : forall (x y : A) (r : clos R x y), match quo_eqr x y r in _ = z return P z with eq_refl => u x end = u y),
+    forall q : Quo A R, P q.
+Proof.
+intros A R P u uε q.
+unshelve refine (quo_rect P u _ q).
+intros x y r.
+replace (quo_eq x y r) with (quo_eqr x y (clos_incl _ _ _ r)) by apply pi.
+apply uε.
+Qed.
+*)
+
+(** We need propext to prove this from the other quotient axioms??? *)
+Axiom quo_inv : forall {A} {R : A -> A -> Prop} (x y : A) (e : quo R x = quo R y), clos R x y.
+
+(*
+
+set (x' := quo R x) in *.
+assert (e' : x' = quo R x) by reflexivity; clearbody x'.
+revert x' x y e e'.
+unshelve refine (quo_rect _ _ _).
++ intros x' x y e e'.
+
+intros x y r.
+
+ *)
+(*
+Inductive Sh_R {ℙ} (A : psh ℙ) (J : site ℙ) {p} : T_obj A J p -> T_obj A J p -> Prop :=
+| sh_R :
+  forall (s s' : sieve p) (i : ste_sve J s) (i' : ste_sve J s')
+  (f : s' ⊆ s) (c : cover A s),
+  Sh_R A J
+    (Build_T_obj ℙ A J p s i c)
+    (Build_T_obj ℙ A J p s' i' (cover_map c f)).
+*)
+
+Definition Sh_R {ℙ} (A : psh ℙ) (J : site ℙ) {p} : T_obj A J p -> T_obj A J p -> Prop.
+Proof.
+intros [s i c] [s' i' c'].
+refine (exists (f : s ⊆ s'), _).
+refine (forall q (α : ℙ q p) (hα : α ∈ s), c.(cov_fun) α hα = c'.(cov_fun) α (f _ _ hα)).
+Defined.
+
+(** Sheafification *)
+Definition Sh {ℙ} (A : psh ℙ) (J : site ℙ) : psh ℙ.
+Proof.
+unshelve econstructor.
++ unshelve refine (fun p => Quo (T_obj A J p) (Sh_R A J)).
++ intros p q α; cbn in *.
+  unshelve refine (quo_elim _ _ _).
+  - intros x; refine (quo _ _).
+    refine (θ (T A J) α x).
+  - intros x y r; cbn.
+    apply quo_eq.
+    destruct r as [f e].
+    unshelve econstructor; cbn.
+    * intros r β hβ; apply f, hβ.
+    * intros r β hβ; cbn.
+      apply e.
++ intros p x; cbn in *.
+  match goal with [ |- quo_elim _ _ ?e _ = _ ] =>
+    generalize e
+  end.
+  revert x.
+  unshelve refine (quo_rect _ _ _); cbn.
+  - intros x e.
+    rewrite quo_elim_eq; apply quo_eq.
+    clear; destruct x as [s i c].
+    unshelve eexists.
+    * intros q α hα; cbn in *; rewrite cat_cmp_r in hα; assumption.
+    * cbn; intros q α hα.
+      revert hα; rewrite cat_cmp_r; intros; f_equal.
+  - intros x y r; cbn; apply pi.
++ intros p q r α β x; cbn in *.
+  revert x; unshelve refine (quo_rect _ _ _).
+  - intros x.
+    rewrite !quo_elim_eq; cbn.
+    apply quo_eq.
+    unshelve econstructor; cbn.
+    * intros t γ hγ; cbn in *; rewrite cat_cmp_cmp; assumption.
+    * intros t γ; cbn. rewrite cat_cmp_cmp; intros; f_equal; apply pi.
+  - intros; apply pi.
+Defined.
+
+Definition Sh_η {ℙ} (A : psh ℙ) (J : site ℙ) : Hom A (Sh A J).
+Proof.
+unshelve econstructor.
++ intros p x; cbn; apply quo.
+  unshelve eexists.
+  - unshelve econstructor.
+    * intros; exact True.
+    * cbn; intros; constructor.
+  - apply ste_ret; cbn; constructor.
+  - apply cover_η; assumption.
++ intros p q α x; cbn.
+  rewrite quo_elim_eq; cbn; apply quo_eq; cbn.
+  unshelve econstructor.
+  - intros r β; cbn; constructor.
+  - cbn; intros r β _; rewrite psh_mon_cmp; reflexivity.
+Defined.
+
+Definition isSeparated {ℙ} (A : psh ℙ) (J : site ℙ) :=
+  forall (p : ℙ) (s : sieve p) (hs : ste_sve J s) (c : cover A s) (x y : A p),
+    (forall (q : ℙ) (α : ℙ q p) (hα : α ∈ s), θ A α x = cov_fun c α hα) ->
+    (forall (q : ℙ) (α : ℙ q p) (hα : α ∈ s), θ A α y = cov_fun c α hα) ->
+      x = y.
+
+Definition Sh_isSeparated {ℙ} (A : psh ℙ) (J : site ℙ) : isSeparated (Sh A J) J.
+Proof.
+intros p s i c; cbn.
+unshelve refine (quo_rect _ _ _); cbn.
++ intros x y Hx' Hy.
+  assert (Hx : forall (q : ℙ) (α : ℙ q p) (hα : α ∈ s),
+    quo (Sh_R A J)
+      {| tup_sve := sieve_mon (tup_sve x) α; tup_mod := ste_mon J (tup_sve x) α (tup_mod x); tup_cov := cover_mon A (tup_sve x) (tup_cov x) α |} =
+      cov_fun c α hα).
+  { intros q α hα; specialize (Hx' q α hα); rewrite quo_elim_eq in Hx'; apply Hx'. }
+  clear Hx'.
+  revert y Hy.
+  unshelve refine (quo_rect _ _ _); cbn.
+  - intros y Hy'.
+    assert (Hy : forall (q : ℙ) (α : ℙ q p) (hα : α ∈ s),
+      quo (Sh_R A J)
+        {| tup_sve := sieve_mon (tup_sve y) α; tup_mod := ste_mon J (tup_sve y) α (tup_mod y); tup_cov := cover_mon A (tup_sve y) (tup_cov y) α |} =
+        cov_fun c α hα).
+    { intros q α hα; specialize (Hy' q α hα); rewrite quo_elim_eq in Hy'; apply Hy'. }
+    clear Hy'.
+    destruct x as [sx ix cx], y as [sy iy cy]; cbn in *.
+    assert (ixy : ste_sve J (sieve_prod s (sieve_prod sx sy))).
+    {
+      repeat apply site_prod; assumption.
+    }
+    (* non canonical choice *)
+    unshelve refine (let cxy : cover A (sieve_prod s (sieve_prod sx sy)) := cover_map cx _ in _).
+    {
+      intros q α [_ [hα _]]; exact hα.
+    }
+    transitivity (
+      quo (Sh_R A J) (Build_T_obj ℙ A J p (sieve_prod s (sieve_prod sx sy)) ixy cxy)
+    ).
+    * symmetry; apply quo_eq.
+      unshelve econstructor.
+      { intros q α [_ [hα _]]; apply hα. }
+      intros q α [hx hy]; reflexivity.
+    * apply quo_eq.
+      unshelve econstructor.
+      { intros q α [_ [_ hβ]]; apply hβ. }
+      intros q α [hs [hsx hsy]]; cbn.
+      clear ixy cxy.
+      specialize (Hx _ α hs).
+      specialize (Hy _ α hs).
+      rewrite <- Hy in Hx; clear Hy; rename Hx into H.
+      
+
+  - intros; apply pi.
++ intros; apply pi.
+Defined.
+
+
+Definition Sh_isSheaf {ℙ} (A : psh ℙ) (J : site ℙ) : isSheaf (Sh (Sh A J) J) J.
+Proof.
+unshelve refine (shf_elt_rev2 _ _ _ _); [unshelve econstructor|].
++ intros p [s i c]; cbn in *.
+  apply quo; unshelve econstructor.
+  - assert (Q : cover Sieve s).
+    { unshelve econstructor; cbn.
+      + intros q α hα.
+        assert (f := c.(cov_fun) α hα).
+        cbn in *; revert f.
+        unshelve refine (quo_rect _ _ _).
+        - intros [s' i' c']; apply s'.
+        - cbn; intros x y r.
+          destruct quo_eq.
+          destruct r as [f e]; cbn in *.
+          apply sieve_eq.
+          
