@@ -2,6 +2,8 @@ Set Primitive Projections.
 Set Universe Polymorphism.
 Set Polymorphic Inductive Cumulativity.
 
+Set Definitional UIP.
+
 Inductive seq {A : Type} (x : A) : A -> SProp := srefl : seq x x.
 
 Notation "x ≡ y" := (seq x y) (at level 70).
