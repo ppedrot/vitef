@@ -291,6 +291,18 @@ apply propext; cbn; split; intros H.
   - apply HP; assumption.
 Qed.
 
+Axiom choice : forall A (P : A -> Prop), (exists x, P x) -> {x : A | P x}.
+
+Definition Sh_alg {J A} (hA : isSheaf J A) (x : Sh J A) : A.
+Proof.
+destruct x as [P HP].
+unshelve refine (hA.(shf_elt) _ HP _).
+refine (fun H => proj1_sig (choice _ _ H)).
+Defined.
+
+(* Lemma Sh_alg_η : forall J A (hA : isSeparated J A) (x : A),
+  Sh_alg (isSheaf_Sh J A hA) (Sh_η J A x) = x. *)
+
 (** Sheafification with quotients *)
 
 Axiom Quo : forall (A : Type) (R : A -> A -> Prop), Type.
