@@ -12,6 +12,19 @@ Arguments ste_mon {_}.
 
 Coercion ste_fun : site >-> Funclass.
 
+Axiom funext : forall A (B : A -> Type) (f g : forall x, B x),
+  (forall x, f x = g x) -> f = g.
+Axiom pi : forall (A : Prop) (p q : A), p = q.
+
+Ltac unwrap :=
+repeat match goal with
+| [ H : @ste_fun ?J ?P |- ste_fun _ ] =>
+  let H' := fresh H in
+  refine (ste_mon _ _ H (fun H' => _));
+  replace H with (@ste_top J _ H') in * by apply pi;
+  clear H; rename H' into H
+end.
+
 Record isSheaf (J : site) (A : Type) := {
   shf_elt : forall P : Prop, J P -> (P -> A) -> A;
   shf_spc : forall P (i : J P) (c : P -> A) (x : A),
@@ -25,10 +38,6 @@ Record isSheaf' (J : site) (A : Type) := {
   shf_elt' : forall P : Prop, J P -> (P -> A) -> A;
   shf_spc' : forall P (i : J P) (x : A), x = shf_elt' P i (fun _ => x);
 }.
-
-Axiom funext : forall A (B : A -> Type) (f g : forall x, B x),
-  (forall x, f x = g x) -> f = g.
-Axiom pi : forall (A : Prop) (p q : A), p = q.
 
 Lemma sig_eq : forall {A} {P : A -> Prop} (p q : @sig A P), proj1_sig p = proj1_sig q -> p = q.
 Proof.
@@ -61,6 +70,18 @@ unshelve econstructor.
   apply shf_spc; constructor.
 Defined.
 
+Lemma isSheaf_hProp : forall J A (p q : isSheaf J A), p = q.
+Proof.
+intros J A [f hf] [g hg].
+assert (e : f = g).
++ apply funext; intros P; apply funext; intros i; apply funext; intros x.
+  apply hg; intros p.
+  symmetry; apply hf; intros p'.
+  f_equal; apply pi.
++ revert hf hg; rewrite e; intros.
+  replace hf with hg by apply pi; reflexivity.
+Qed.
+
 (** Closure under products *)
 
 Lemma Prod_isSheaf : forall (J : site) (A : Type) (B : A -> Type),
@@ -92,10 +113,19 @@ Lemma isSeparated_closed_diag : forall (J : site) A,
 Proof.
 intros J A hA P i c x y hx hy.
 refine (hA _ _ _).
-refine (@ste_mon J _ _ i _).
-intros p; apply ste_top.
-rewrite (hx p), (hy p); reflexivity.
+unwrap.
+apply ste_top.
+rewrite (hx i), (hy i); reflexivity.
 Defined.
+
+Lemma isSeparated_isSheaf : forall (J : site) A,
+  isSheaf J A -> isSeparated J A.
+Proof.
+intros J A hA P i c x y hx hy.
+rewrite (shf_spc hA P i c); [|apply hy].
+rewrite <- (shf_spc hA P i c x); [|apply hx].
+reflexivity.
+Qed.
 
 Definition PropJ (J : site) := {P : Prop | J P -> P}.
 
@@ -121,21 +151,20 @@ Proof.
 destruct m as [P hP].
 unshelve econstructor.
 + refine (fun y => liftJ J (exists x : A, proj1_sig (P x) /\ proj1_sig (proj1_sig (f x) y))).
-+ refine (ste_mon _ _ hP _); clear hP; intros hP.
++ unwrap.
   destruct hP as [x hx].
   remember (f x) as Q.
   destruct Q as [Q HQ]; cbn in *.
-  refine (ste_mon _ _ HQ _); intros HQ'.
-  replace HQ with (@ste_top J _ HQ') in HeqQ by apply pi.
-  clear HQ; destruct HQ' as [y hy].
+  unwrap.
+  destruct HQ as [y hy].
   apply sig_eq_rev in HeqQ; cbn in HeqQ; subst Q.
   apply ste_top; exists y; intros y'; split; intro H.
   - refine (ste_mon _ _ H _); clear H; intros [x' [Hl Hr]].
     assert (e : J (x = x')).
     { apply hx; assumption. }
-    refine (ste_mon _ _ e _); clear e; intros e; subst x'.
+    unwrap; subst x'.
     apply hy; assumption.
-  - refine (ste_mon _ _ H _); clear H; intros H; subst y'.
+  - unwrap; subst y'.
     apply ste_top; exists x; split.
     { apply hx, ste_top; reflexivity. }
     { apply hy, ste_top; reflexivity. }
@@ -300,10 +329,26 @@ unshelve refine (hA.(shf_elt) _ HP _).
 refine (fun H => proj1_sig (choice _ _ H)).
 Defined.
 
-(* Lemma Sh_alg_η : forall J A (hA : isSeparated J A) (x : A),
-  Sh_alg (isSheaf_Sh J A hA) (Sh_η J A x) = x. *)
+Lemma Sh_alg_η : forall J A (hA : isSheaf J A) (x : A),
+  Sh_alg hA (Sh_η J A x) = x.
+Proof.
+intros J A hA x.
+unfold Sh_alg; cbn.
+symmetry; apply shf_spc; intros [y Hy].
+destruct choice as [z Hz]; cbn.
+apply closed_diag_isSeparated with J.
++ apply isSeparated_isSheaf, hA.
++ specialize (Hy x); specialize (Hz x).
+  assert (i : J (y = x)).
+  { apply Hy, ste_top; reflexivity. }
+  assert (j : J (z = x)).
+  { apply Hz, ste_top; reflexivity. }
+  refine (ste_mon _ _ i (fun i => ste_mon _ _ j _)).
+  intros []; apply ste_top; reflexivity.
+Qed.
 
 (** Sheafification with quotients *)
+Module QuotientSh.
 
 Axiom Quo : forall (A : Type) (R : A -> A -> Prop), Type.
 Axiom quo : forall {A} R (x : A), Quo A R.
@@ -331,16 +376,6 @@ intros; unfold quo_elim.
 refine (quo_rect_eq _ _ _ _ _ _).
 Qed.
 
-Inductive clos {A} (R : A -> A -> Prop) : A -> A -> Prop :=
-| clos_incl : forall x y, R x y -> clos R x y
-| clos_refl : forall x, clos R x x
-| clos_trns : forall x y z, clos R x y -> clos R y z -> clos R x z
-| clos_symm : forall x y, clos R x y -> clos R y x.
-
-(** We need propext to prove this from the other quotient axioms??? *)
-Axiom quo_inv : forall {A} {R : A -> A -> Prop} (x y : A) (e : quo R x = quo R y), clos R x y.
-
-
 Record T (J : site) (A : Type) := {
   t_prp : Prop;
   t_prf : J t_prp;
@@ -351,104 +386,394 @@ Arguments t_prp {_ _}.
 Arguments t_prf {_ _}.
 Arguments t_elt {_ _}.
 
-Definition Tr {J A} (x y : T J A) : Prop :=
-  exists (α : x.(t_prp) -> y.(t_prp)), forall (p : x.(t_prp)), x.(t_elt) p = y.(t_elt) (α p).
+Record Tr₀ {J A} (x y : T J A) (P : Prop) : Prop := {
+  tr_prf : J P;
+  tr_hom : P -> x.(t_prp) /\ y.(t_prp);
+  tr_eqv : forall (p : P), x.(t_elt) (proj1 (tr_hom p)) = y.(t_elt) (proj2 (tr_hom p));
+}.
+
+Definition Tr {J A} x y := exists P, (@Tr₀ J A x y P).
+
+Lemma Tr_refl : forall J A x, @Tr J A x x.
+Proof.
+intros J A x.
+exists (t_prp x); unshelve econstructor.
++ tauto.
++ destruct x; tauto.
++ intros p; cbn; f_equal; apply pi.
+Qed.
+
+Lemma Tr_sym : forall J A x y, @Tr J A x y -> Tr y x.
+Proof.
+intros J A x y [P [i f v]].
+exists P; unshelve econstructor.
++ intros; split; apply f; assumption.
++ assumption.
++ intros p; symmetry.
+  specialize (v p).
+  etransitivity; [|etransitivity]; [|apply v|]; f_equal; apply pi.
+Qed.
+
+Lemma Tr_trans : forall J A x y z, @Tr J A x y -> Tr y z -> Tr x z.
+Proof.
+intros J A x y z [P [i f v]] [Q [j g w]].
+exists (P /\ Q); unshelve econstructor.
++ intros [? ?]; split; [apply f|apply g]; assumption.
++ unwrap; apply ste_top; tauto.
++ intros [p q].
+  match goal with [ |- _ _ ?p = _ _ ?q ] => set (l := p); set (r := q); clearbody l r end.
+  replace l with (proj1 (f p)) by apply pi.
+  etransitivity; [apply v|].
+  replace r with (proj2 (g q)) by apply pi.
+  replace (proj2 (f p)) with (proj1 (g q)) by apply pi.
+  apply w.
+Qed.
 
 Definition ShQ J A := Quo (T J A) Tr.
 
-(*
-Lemma Tr_eq : forall (J : site) (A : Type) (pX pY : T J A)
-  (p : t_prp pX) (q : t_prp pY), clos Tr pY pX -> t_elt pX p = t_elt pY q.
+Lemma ShQ_eq : forall J A p q, quo Tr p = quo Tr q -> @Tr J A p q.
 Proof.
-induction 1.
-+ destruct H as [α e].
-  symmetry; replace p with (α q) by apply pi.
-  apply e.
-+ replace p with q by apply pi; reflexivity.
-+ transitivity.
-  - apply IHclos2.
-  - apply IHclos1.
-+ symmetry; apply IHclos.
+intros J A p q e.
+simple refine (let T := quo_rect (fun x => Prop) (fun x => Tr x q) _ (quo Tr p) in _).
+{ intros x y r.
+  destruct quo_eq; apply propext; split; intros;
+  eapply Tr_trans; first [eassumption|apply Tr_sym; eassumption|idtac]. }
+replace (Tr p q) with T; unfold T.
+2:{ rewrite quo_rect_eq; reflexivity. }
+rewrite e, quo_rect_eq.
+apply Tr_refl.
 Qed.
-*)
 
-Lemma Tr_eq : forall (J : site) (A : Type) (P : Prop) (i : J P) 
-  (x : P -> A) (Q : Prop) (j : J Q) (y : Q -> A),
-  quo Tr {| t_prp := Q; t_prf := j; t_elt := y |} =
-  quo Tr {| t_prp := P; t_prf := i; t_elt := x |} ->
-  forall (p : P) (q : Q), x p = y q.
+Definition ofSh {J A} (x : Sh J A) : ShQ J A.
 Proof.
-Admitted.
+unfold ShQ.
+destruct x as [Px Hx].
+apply quo.
+refine (Build_T _ _ _ Hx _).
+intros H; apply choice in H.
+destruct H as [x hx].
+exact x.
+Defined.
 
-Lemma isSeparated_Q : forall J (A : Type), isSeparated J (ShQ J A).
+Lemma ste_iff_map : forall (J : site) A B, (A <-> B) -> (J A <-> J B).
+Proof.
+intros J A B [Hl Hr]; split; intros H; refine (ste_mon _ _ H _); intro; apply ste_top; intuition.
+Qed.
+
+Lemma toSh_subproof (J : site) (P : Prop) A (k : P -> A) (i : J P) :
+  J (exists x : A, forall y : A, J (forall p : P, y = k p) <-> J (x = y)).
+Proof.
+refine (ste_mon _ _ i (fun p => _)).
+apply ste_top; exists (k p); intros y.
+apply ste_iff_map; split; intros H.
++ symmetry; apply H.
++ intros p'; replace p' with p by apply pi; symmetry; assumption.
+Qed.
+
+Definition toSh {J A} (x : ShQ J A) : Sh J A.
+Proof.
+revert x.
+unshelve refine (quo_rect _ _ _).
++ intros [P i k].
+  pose (join P (x : J (J P)) := @ste_mon J _ _ x (fun x => x)).
+  unshelve refine (exist _ (fun x => exist _ (J (forall p, x = k p)) (join _)) _).
+  apply toSh_subproof, i.
++ intros x y r; cbn.
+  apply sig_eq; cbn.
+  apply funext; intros z; cbn.
+  apply sig_eq; cbn.
+  set (e := quo_eq x y r); clearbody e.
+  destruct e; cbn.
+  destruct r as [P [i f e]]; cbn in *.
+  destruct x as [X ix kx], y as [Y iy ky]; cbn in *.
+  apply propext; split; intros H.
+  - refine (ste_mon _ _ i (fun i => ste_mon _ _ H (fun H => ste_top _ _))).
+    intros p; rewrite (H (proj1 (f i))), e; f_equal; apply pi.
+  - refine (ste_mon _ _ i (fun i => ste_mon _ _ H (fun H => ste_top _ _))).
+    intros p; rewrite (H (proj2 (f i))), <- e; f_equal; apply pi.
+Defined.
+
+Lemma toSh_ofSh : forall J A (x : Sh J A), toSh (ofSh x) = x.
+Proof.
+intros J A [P HP]; cbn.
+apply sig_eq; cbn.
+apply funext; intros x; apply sig_eq; cbn.
+unfold toSh; cbn.
+rewrite quo_rect_eq; cbn.
+apply propext; split; intros H.
++ apply (proj2_sig (P x)).
+  refine (ste_mon _ _ HP (fun HP => ste_mon _ _ H (fun H => _))).
+  clear H0 HP0.
+  specialize (H HP); cbn in *.
+  destruct choice as [y Hy].
+  subst y.
+  apply ste_top, Hy, ste_top, eq_refl.
++ refine (ste_mon _ _ HP (fun HP => _)); clear HP0.
+  destruct HP as [y Hy].
+  assert (e : J (y = x)).
+  { apply Hy; assumption. }
+  refine (ste_mon _ _ e (fun e => _)); clear e0.
+  subst y.
+  assert (e : exists z, forall y, proj1_sig (P y) <-> J (z = y)).
+  { exists x; assumption. }
+  match goal with [ |- _ ?P ] => replace P with (x = proj1_sig (choice _ _ e)) end.
+  2:{ apply propext; split; intros.
+      + replace p with e by apply pi; assumption.
+      + apply H0. }
+  destruct choice as [w Hw]; cbn.
+  cut (J (w = x)); [|apply Hw; assumption].
+  intros Hr.
+  refine (ste_mon _ _ Hr (fun Hr => ste_top _ _)); congruence.
+Qed.
+
+Lemma ofSh_toSh : forall J A (x : ShQ J A), ofSh (toSh x) = x.
+Proof.
+intros J A.
+unshelve refine (quo_rect _ _ _).
++ intros [P i k]; cbn.
+  unfold toSh; rewrite quo_rect_eq; cbn.
+  apply quo_eq; cbn.
+  exists ((exists x : A, forall y : A, (forall p : P, y = k p <-> x = y)) /\ P);  unshelve econstructor.
+  - cbn; intros [_ p]; split; [|assumption].
+    { exists (k p); intros y.
+      apply ste_iff_map; split; [now intuition|].
+      intros [] q; f_equal; apply pi. }
+  - unwrap; apply ste_top; split; [|assumption].
+    exists (k i); intros y q.
+    replace q with i by apply pi; split; congruence.
+  - cbn; intros [e p].
+    destruct choice as [x Hx]; cbn.
+    match goal with [ |- x = k ?p ] => set (q := p); clearbody q end.
+        
+    specialize (Hx (k p)).
+    admit.
++ intros x y r.
+  apply pi.
+Abort.
+
+Lemma isSeparated_ShQ : forall J (A : Type), isSeparated J (ShQ J A).
 Proof.
 intros J A R k c x y hx hy.
-revert x hx y hy; unshelve refine (quo_rect _ (fun x hx => quo_rect _ (fun y hy => _) _) _).
-+ destruct x as [P i x].
-  destruct y as [Q j y].
-  unshelve refine (let z : T J A := Build_T J A (R /\ P /\ Q) _ _ in _).
-  { refine (ste_mon _ _ i (fun i => ste_mon _ _ j (fun j => ste_mon _ _ k (fun k => ste_top _ (conj k (conj i j)))))). }
-  { intros [_ [p _]]; refine (x p). }
-  transitivity (quo Tr z); [symmetry|]; apply quo_eq.
-  - unshelve econstructor; cbn.
-    { intros [_ [p _]]; exact p. }
-    { intros [_ [p _]]; reflexivity. }
-  - unshelve econstructor; cbn.
-    { intros [_ [_ q]]; exact q. }
-    { intros [r [p q]].
-      clear z.
-      specialize (hx r).
-      specialize (hy r).
-      rewrite <- hx in hy; clear hx.
-      eapply Tr_eq, hy.
-    }
+cut (forall p : R, x = y).
+2:{ intros r; rewrite (hx r), <- (hy r); reflexivity. }
+clear c hx hy.
+revert x y.
+unshelve refine (quo_rect _ (fun x => quo_rect _ (fun y => _) _) _).
++ intros e.
+  apply quo_eq.
+  destruct x as [P i x], y as [Q j y].
+  (** Needs functional choice *)
+  assert (eR := fun r => choice _ _ (ShQ_eq _ _ _ _ (e r))); clear e; rename eR into e.
+  exists (P /\ Q /\ exists r : R, proj1_sig (e r)).
+  unshelve econstructor.
+  - cbn; intros [p [q r]]; split; assumption.
+  - unwrap.
+    set (S r := proj1_sig (e r)).
+    assert (l : J (S k)); [|clearbody S; clear e].
+    { clear - e; unfold S; destruct e as [? [? ? ?]]; assumption. }
+    unwrap.
+    apply ste_top; now intuition eauto.
+  - intros [p [q [r s]]]; cbn.
+    destruct e as [S [l h z]]; cbn in *; clear e.
+    specialize (z s).
+    etransitivity; [|etransitivity]; [|apply z|]; f_equal; apply pi.
 + intros; apply pi.
 + intros; apply pi.
-Defined.
+Qed.
 
 Lemma isSheaf_ShQ : forall J (A : Type), isSeparated J A -> isSheaf J (ShQ J A).
 Proof.
 intros J A hA.
-
+(* assert (hShA := isSeparated_ShQ J A). *)
 unshelve econstructor.
 + intros P i x.
-  refine (quo _ _); unshelve econstructor.
-  - refine (exists p : P, _).
-(*
-    unshelve refine (quo_elim Prop _ _ (x p)).
-    { intros [Q _ _]; exact (P /\ Q). }
-    { clear - hA; intros [Q j y] [R k z].
-      intros [α f]; cbn in *.
-cbn.
-*)
-  exact True.
-  - admit.
-  - intros r.
-    unshelve refine (quo_elim _ _ _ (x _)).
-    
-intros [p q].
-
-
-Definition bind {J A B} : Q J A -> (A -> Q J B) -> Q J B.
-Proof.
-intros x f.
-revert x.
-unshelve refine (Q_rect _ _ _).
-+ intros P i φ.
-  apply f.
-  apply φ.
-
-Lemma isSheaf_Q : forall J (A : Type), isSheaf J (Q J (Q J A)).
-Proof.
-intros J A.
-unshelve econstructor.
-+ intros P i φ.
-  unshelve refine (qc P i (fun p => _)).
-  specialize (φ p).
-  revert φ.
-  clear.
-  unshelve refine (Q_rect _ _ _).
-  - intros R j ψ.
-    unshelve refine (qc R j _).
+  simple refine (let R : P -> Prop := fun p => _ in _).
+  { simple refine (@quo_rect _ _ (fun _ => Prop) (fun p => J (t_prp p)) _ (x p)); cbn.
+    abstract (intros [Q j y] [R k z] e; destruct quo_eq; apply propext; cbn in *; tauto). }
+  apply quo.
+  exists (exists p : P, R p).
+  - unwrap.
+    assert (j : R i).
+    { unfold R. generalize (x i); clear - hA.
+      simple refine (quo_rect _ _ _); cbn.
+      + intros [Q j y].
+        rewrite quo_rect_eq; cbn; assumption.
+      + intros; apply pi. }
+    apply ste_top; exists i; assumption.
+  - intros H.
+    assert (i' : P) by (destruct H; assumption).
+    clear i; rename i' into i.
+    assert (j : R i).
+    { destruct H as [i' j]; replace i with i' by apply pi; assumption. }
+    clear H.
+    unfold R in j; clear R.
+    set (H := isSheaf_ShQ_subproof J A P x i) in j; clearbody H.
+    set (x' := x i) in *; clearbody x'; clear x; rename x' into x.
+    revert x H j.
+    simple refine (quo_rect _ _ _); cbn.
+    * intros [Q j y] H; cbn.
+      rewrite quo_rect_eq; cbn.
     
 Abort.
+
+Definition ShQ_η {J A} (x : A) : ShQ J A :=
+  quo _ (Build_T _ _ True (ste_top _ I) (fun _ => x)).
+
+Definition ShQ_bind {J A B} (x : ShQ J A) (f : A -> ShQ J B) : ShQ J B.
+Proof.
+revert x.
+simple refine (quo_rect _ _ _); cbn.
++ intros [P i x].
+  refine (quo _ _).
+  simple refine (let R : P -> Prop := fun p => _ in _).
+  { simple refine (@quo_rect _ _ (fun _ => Prop) t_prp _ (f (x p))); cbn.
+    intros y z r.
+    destruct quo_eq.
+  (* Global choice *)
+Abort.
+
+Definition ShQ_alg {J A} (hA : isSheaf J A) (x : ShQ J A) : A.
+Proof.
+destruct hA as [hA eA].
+revert x; simple refine (quo_rect _ _ _).
++ intros [P i x].
+  apply (hA P i x).
++ intros x y e; cbn.
+  apply eA; intros q.
+  destruct quo_eq.
+  symmetry; apply eA; intros p.
+  destruct e as [R [k ? e]].
+  transitivity (hA R k (fun _ => t_elt x p)).
+  - apply eA; intros r.
+    symmetry; etransitivity; [|etransitivity]; [|apply (e r)|]; f_equal; apply pi.
+  - symmetry; apply eA; intros r; reflexivity.
+Defined.
+
+Lemma ShQ_alg_η : forall J A (hA : isSheaf J A) (x : A),
+  ShQ_alg hA (ShQ_η x) = x.
+Proof.
+intros J A hA x.
+unfold ShQ_alg, ShQ_η.
+rewrite quo_rect_eq.
+symmetry; apply shf_spc; intros; reflexivity.
+Qed.
+
+
+End QuotientSh.
+
+Module DialogueSh.
+
+Axiom ShD : site -> Type -> Type.
+Axiom ret : forall {J A}, A -> ShD J A.
+Axiom ask : forall {J : site} {A} (P : Prop) (i : J P), (P -> ShD J A) -> ShD J A.
+Axiom eqn : forall (J : site) A P (i : J P) (x : ShD J A),
+  ask P i (fun (_ : P) => x) = x.
+
+Axiom ShD_rect : forall (J : site) (A : Type) (P : ShD J A -> Type)
+  (ur : forall (x : A), P (ret x))
+  (ua : forall (S : Prop) (i : J S) (k : S -> ShD J A),
+    (forall p : S, P (k p)) -> P (ask S i k))
+  (ue : forall (S : Prop) (i : J S) (x : ShD J A) (px : P x),
+    match eqn J A S i x in _ = e return P e with eq_refl => ua S i (fun _ => x) (fun _ => px) end = px)
+  (x : ShD J A)
+,
+  P x.
+(* P (ask S i (fun _ => x) *)
+
+Axiom ShD_rect_ret : forall J A P ur ua ue (x : A),
+  ShD_rect J A P ur ua ue (ret x) = ur x. 
+
+Axiom ShD_rect_ask : forall (J : site) A P ur ua ue (S : Prop) (i : J S) (k : S -> ShD J A),
+  ShD_rect J A P ur ua ue (ask S i k) = ua S i k (fun p => ShD_rect J A P ur ua ue (k p)). 
+
+Definition bind {J A B} (m : ShD J A) (f : A -> ShD J B) : ShD J B.
+Proof.
+simple refine (ShD_rect _ _ (fun _ => ShD J B) f (fun S i k r => ask S i r) _ m).
+{
+  cbn; intros S i x y.
+  destruct eqn; apply eqn.
+}
+Defined.
+
+Lemma ret_bind : forall J A B (x : A) (f : A -> ShD J B), bind (ret x) f = f x.
+Proof.
+intros; unfold bind; cbn.
+rewrite ShD_rect_ret; reflexivity.
+Qed.
+
+Lemma bind_ret : forall J A (m : ShD J A) , bind m ret = m.
+Proof.
+intros; unfold bind; cbn; revert m.
+simple refine (ShD_rect _ _ _ _ _ _); cbn.
++ intros x.
+  rewrite ShD_rect_ret; reflexivity.
++ intros S i k e; rewrite ShD_rect_ask.
+  f_equal; apply funext; intros s.
+  rewrite (e s); reflexivity.
++ intros; apply pi.
+Qed.
+
+Lemma bind_assoc : forall J A B C (f : A -> ShD J B) (g : B -> ShD J C) (m : ShD J A),
+  bind (bind m f) g = bind m (fun x => bind (f x) g).
+Proof.
+intros J A B C f g.
+simple refine (ShD_rect _ _ _ _ _ _); unfold bind; cbn.
++ intros x.
+  rewrite !ShD_rect_ret; cbn; reflexivity.
++ intros S i k e.
+  rewrite !ShD_rect_ask; f_equal; apply funext; intros s.
+  rewrite (e s).
+  reflexivity.
++ intros; apply pi.
+Qed.
+
+(*
+
+Γ ⊢ P : bool → Type
+Γ ⊢ ut : P true
+Γ ⊢ uf : P false
+================
+_ : Π b : bool, P b
+
+Γ, b : bool ⊢ P is a type
+Γ ⊢ ut : P true
+Γ ⊢ uf : P false
+================
+_ : Π b : bool, P b
+
+
+*)
+
+(* Small elimination *)
+Lemma bool_dep_elim : forall J
+  (P : ShD J bool -> Type) (Pε : forall b, isSheaf J (P b))
+  (ut : P (ret true))
+  (uf : P (ret false))
+  (b : ShD J bool),
+  P b.
+Proof.
+intros J P Pε ut uf.
+simple refine (ShD_rect _ _ _ _ _ _); [intros [|]| |].
++ apply ut.
++ apply uf.
++ refine (fun S i k r => _).
+  refine ((Pε (ask S i k)).(shf_elt) S i (fun s => _)).
+  replace k with (fun (_ : S) => k s).
+  2: { abstract (apply funext; intros; f_equal; apply pi). }
+  rewrite eqn.
+  apply r.
++ intros S i x r; cbn in *.
+  set (e := eqn J bool S i x); clearbody e.
+  match goal with [ |- context [ shf_elt _ _ _ ?f ] ] => set (k := f) end; cbn in k.
+  pose (r' := match e in _ = x' return P x' -> P (ask S i (fun _ => x)) with eq_refl => fun r => r end r).
+  replace (shf_elt (Pε (ask S i (fun _ : S => x))) S i k) with r'; unfold r'; clear r'.
+  2:{ apply shf_spc; intros s; unfold k.
+      unfold eq_rect_r, eq_rect, eq_sym.
+      set (rw := bool_dep_elim_subproof J S (fun _ : S => x) s); clearbody rw.
+      assert (e' : rw = eq_refl) by apply pi.
+      cbn in rw; rewrite e'.
+      rewrite e; reflexivity.
+      }
+  clear.
+  rewrite e; reflexivity.
+Qed.
