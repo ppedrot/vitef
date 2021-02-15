@@ -941,15 +941,8 @@ Section Complicated_bool_dep_elim.
 
   Lemma simpl_b (b : ShD J bool) : projT1 (alg (map pack_with_pf b)) = b.
   Proof.
-    unfold alg, pack_with_pf.
-    rewrite <- (ShD_homomorphism _ (isSheaf_ShD J bool)).
-    rewrite map_cmp.
-    unfold pack_with_pf; cbn.
-    rewrite ShD_alg_free. unfold mu, map.
-    rewrite bind_assoc.
-    set (h := fun _ => _).
-    assert (h = ret) as -> by (apply funext; intros ?; unfold h; rewrite ret_bind ; reflexivity).
-    apply bind_ret.
+    unfold alg; rewrite <- (ShD_homomorphism _ (isSheaf_ShD J bool)), map_cmp.
+    cbn; now rewrite map_ret', ShD_alg_ret.
   Qed.
 
   Definition bool_dep_elim'  (b : ShD J bool) : P b :=
