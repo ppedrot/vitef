@@ -271,6 +271,16 @@ replace Ω with (List.map (nlift_atomic 0) Ω).
     apply idSubst_term; reflexivity.
 Qed.
 
+Definition castof {A x y} (P : A -> Type) (e : x = y) (p : P x) : P y :=
+match e in _ = y return P y with eq_refl => p end.
+
+Lemma castof_inv : forall A x y P e p,
+  castof P (eq_sym e) (@castof A x y P e p) = p.
+Proof.
+intros.
+destruct e; reflexivity.
+Qed.
+
 Definition extends_cmp : forall Ω Ω' Ω'', extends Ω Ω' -> extends Ω' Ω'' -> extends Ω Ω''.
 Proof.
 intros Ω Ω' Ω'' α β.
@@ -278,7 +288,26 @@ destruct α as [Σ Θ]; destruct β as [Σ' Θ']; cbn in *.
 rewrite map_app, app_assoc.
 rewrite map_map.
 set (Ξ := list_map (nlift_atomic Σ') Θ); clearbody Ξ; clear Θ; rename Ξ into Θ.
-revert Θ Θ'.
+assert (e : Σ' + Σ + idxℙ Ω = Σ' + (Σ + idxℙ Ω)) by apply Plus.plus_assoc_reverse.
+replace
+  (List.map (fun x => nlift_atomic Σ' (nlift_atomic Σ x)) (ctxℙ Ω)) with
+  (List.map (fun x => nlift_atomic Σ' x) (List.map (fun x => nlift_atomic Σ x) (ctxℙ Ω))).
+2:{ apply list_comp; intros x; reflexivity. }
+match goal with
+| [ |- context [ (Θ' ++ Θ) ++ ?l ] ] => set (Ξ := l)
+end.
+(*
+assert (HΞ := castof_inv _ _ _ (fun n => list (atomic n)) (eq_sym e) Ξ).
+unfold Ξ in HΞ at 1; clearbody Ξ.
+revert Ξ HΞ.
+generalize (eq_sym e) as e'; intros e'.
+revert e' Θ Θ'; rewrite e.
+intros e' Θ Θ' Ξ.
+assert (r := @Eqdep_dec.UIP_dec _ PeanoNat.Nat.eq_dec _ _ e' eq_refl).
+rewrite r; cbn; intros [].
+refine (Extends Ω _ _).
+constructor. 
+*)
 Admitted.
 
 Definition le (p q : ℙ) := forall (r : ℙ), extends p r -> extends q r.
@@ -440,6 +469,7 @@ f_equal; funext; intros n.
 rewrite compComp_term; f_equal.
 rewrite lift_le_cmp.
 clear n; funext; intros n.
+unfold funcomp; cbn.
 Admitted.
 
 Inductive Dyn (Ω : ℙ) (A : forall Ω', Ω' ≤ Ω -> Type) :=
@@ -627,14 +657,31 @@ revert Ω Ω' α ρ x; induction A; intros Ω Ω' α ρ x; cbn in *.
 + intros Ω'' β t.
   rewrite <- lift_le_cmp.
   apply x.
-+ admit.
-Admitted.
++ match type of x with Dyn _ ?A =>
+  unshelve refine (let x := Dyn_isMon _ A _ _ _ ! α x in _); [|clearbody x; cbn in x]
+  end.
+  { clear - IHA; intros Ω' Ω'' α β [t Ht].
+    apply (IHA _ _ β) in Ht.
+    apply interp_subst in Ht.
+    exists (subst_term (lift_le var_term β) t).
+    replace (subst_term (lift_le var_term β) t .: lift_le ρ (β ∘ α)) with
+      ((t .: lift_le ρ α) >> subst_term (lift_le var_term β)).
+    { apply interp_subst; apply Ht. }
+    unfold funcomp; funext; intros [n|]; cbn; [|reflexivity].
+    rewrite lift_le_cmp; reflexivity.
+  }
+  refine (Dyn_map (fun Ω'' β  => _) x).
+  intros [t Ht]; exists t.
+  rewrite <- lift_le_cmp.
+  replace (lift_le ρ (β ∘ α)) with (lift_le ρ (β ∘ (α ∘ !))) by apply lift_le_unique.
+  assumption.
+Qed.
 
 Lemma interp_alg {Σ} (A : form Σ) {Ω} ρ
   (x : Dyn Ω (fun Ω' α => interp A (lift_le ρ α))) : interp A ρ.
 Proof.
 revert Ω ρ x; induction A; intros Ω ρ p; cbn in *.
-+ refine (Dyn_bind p (fun Ω' α x => _)).
++ refine (Dyn_bind p (fun Ω' α x => _)); cbn in *.
   admit.
 + intros Ω' α x.
   apply IHA2.
@@ -694,6 +741,8 @@ intros Σ Φ; induction Φ as [|[a args] Φ IHΦ]; intros Ω ρ p; cbn in *.
   apply IHΦ in p.
   refine (Dyn_bind p _); clear p; intros Ω' α p.
   unshelve refine (Dyn_bind (Dyn_isMon _ _ _ _ _ ! α x) _); clear x.
+  - apply InΩ_isMon.
+  - admit.
 Admitted.
 
 Lemma interp_geometric_axiom :
