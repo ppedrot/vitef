@@ -777,3 +777,185 @@ simple refine (ShD_rect _ _ _ _ _ _); [intros [|]| |].
   clear.
   rewrite e; reflexivity.
 Qed.
+
+
+
+(** The result of sheafifying is a sheaf... *)
+Lemma isSheaf_ShD J A : isSheaf J (ShD J A).
+Proof.
+  apply is_Sheaf_Sheaf'.
+  exists ask.
+  intros; symmetry ; apply eqn.
+Defined.
+
+Lemma shf_elt_ShD J A S i h : shf_elt (isSheaf_ShD J A) S i h = ask S i h.
+Proof. reflexivity. Defined.
+
+
+(* mu and map combinators on ShD *)
+
+Definition mu {J A} (m : ShD J (ShD J A)) := bind m (fun x => x).
+
+Definition map {J A B} (f : A -> B) (m : ShD J A) : ShD J B := bind m (fun x => ret (f x)).
+
+Lemma map_ret {J A B} (f : A -> B) (x : A) : map (J:=J) f (ret x) = ret (f x).
+Proof. unfold map; now rewrite ret_bind. Qed.
+
+(* Probably the most surpising lemma of the bunch
+   Equivalent to the idempotence of ShD according to nlab *)
+Lemma map_ret' {J A} : forall (x : ShD J A), map ret x = ret x.
+Proof.
+  simple refine (ShD_rect _ _ _ _ _ _); cbn.
+  - intros; now rewrite map_ret.
+  - intros. unfold map, bind. rewrite ShD_rect_ask.
+    set (h := fun _ => _); set (x := ret _).
+    assert (h = fun _ => x) as ->; [| apply eqn].
+    apply funext; intro p.
+    specialize H with p.
+    unfold h, x. clear h x.
+    unfold map, bind in H.
+    rewrite H.
+    f_equal.
+    symmetry.
+    assert (k = fun _ => k p) as ->; [|apply eqn].
+    apply funext. intros. f_equal; apply pi.
+  - intros; apply pi.
+Qed.
+
+Definition map_cmp {J A B C} (f : A -> B) (g : B -> C) (m : ShD J A) :
+  map g (map f m) = map (fun x=> g (f x)) m.
+Proof.
+  unfold map.
+  rewrite bind_assoc.
+  f_equal. apply funext; intros ?. rewrite ret_bind. reflexivity.
+Qed.
+
+
+(** Algebra structure on ShD  and lemmas *)
+
+Definition ShD_alg {J A} (hA : isSheaf J A) : ShD J A -> A.
+Proof.
+  simple refine (ShD_rect _ _ _ _ _ _); [trivial| ..].
+  - intros S i k h; cbn; apply (shf_elt hA S i h).
+  - cbn; intros S i x px. destruct (eqn J A S i x).
+    symmetry; apply shf_spc; reflexivity.
+Defined.
+
+(* ShD_alg is a two sided inverse to ret *)
+Lemma ShD_alg_ret {J A} (hA : isSheaf J A) : forall x,  ShD_alg hA (ret x) = x.
+Proof. intros; unfold ShD_alg; now rewrite ShD_rect_ret. Qed.
+
+Lemma ret_ShD_alg {J A} (hA : isSheaf J A) : forall x,  ret (ShD_alg hA  x) = x.
+Proof.
+  intros x.
+  rewrite <- map_ret.
+  rewrite <- map_ret'.
+  rewrite map_cmp.
+  set (h := fun _ => _); assert (h = fun x => x) as ->.
+  + apply funext; intros; unfold h; now rewrite ShD_alg_ret.
+  + unfold map; now rewrite bind_ret.
+Qed.
+
+(* The algebra structure on a free sheave is.. free *)
+Lemma ShD_alg_free {J A} : forall (m : ShD J (ShD J A)),
+  ShD_alg (isSheaf_ShD J A) m = mu m.
+Proof.
+  simple refine (ShD_rect _ _ _ _ _ _); cbn.
+  - intros. unfold mu.
+    now rewrite ShD_alg_ret, ret_bind.
+  - intros S i k h.
+    unfold ShD_alg, mu, bind; rewrite !ShD_rect_ask, shf_elt_ShD.
+    f_equal; apply funext; intro p.
+    apply (h p).
+  - cbn; intros. apply pi.
+Qed.
+
+
+(** Every map between types is an algebra homomorphism *)
+Lemma ShD_homomorphism {J A B} (hA : isSheaf J A) (hB : isSheaf J B) (f : A -> B) (m : ShD J A) :
+  ShD_alg hB (map f m) = f (ShD_alg hA m).
+Proof.
+  now rewrite <- (ret_ShD_alg hA m), map_ret, ShD_alg_ret, (ret_ShD_alg hA m).
+Qed.
+
+
+(** Being a sheaf is closed under dependent sum *)
+
+(* technical lemma on eq_rect *)
+Lemma rew_swap' :
+  forall (A : Type) (P : A -> Type) (x1 x2 : A) (H : x1 = x2)
+    (y1 : P x1) (y2 : P x2),
+  eq_rect_r P y2 H = y1 -> y2 = eq_rect x1 P y1 x2 H.
+Proof.
+  intros ? ? ? ? h ? ? e.
+  rewrite <- (rew_opp_r _ h y2).
+  rewrite e.
+  reflexivity.
+Qed.
+
+Lemma sigma_sheaf : forall J A (Aε : isSheaf J A)
+  (B : A -> Type) (Bε : forall a, isSheaf J (B a)),
+    isSheaf J { a : A & B a}.
+Proof.
+  intros.
+  unshelve econstructor.
+  - intros P i f. exists (shf_elt Aε P i (fun p => projT1 (f p))).
+    apply (shf_elt (Bε _) P i).
+    intro x.
+    rewrite <- shf_spc with (x0:= projT1 (f x)).
+    exact (projT2 (f x)).
+    intro; do 2 f_equal; apply pi.
+  - intros; destruct x as [x1 x2].
+    simple refine (eq_existT_curried _ _ ).
+    + apply shf_spc. intro p; exact (f_equal (projT1 (P:=B)) (H p)).
+    + apply shf_spc; intro p.
+      set (e1 := shf_spc _ _ _ _ _ _).
+      set (e2 := shf_spc _ _ _ _ _ _).
+      apply rew_swap'; unfold eq_rect_r; rewrite rew_compose.
+      rewrite <- (projT2_eq (H p)).
+      f_equal. apply pi.
+Defined.
+
+
+Section Complicated_bool_dep_elim.
+  (**
+     Another way to derive the small dependent eliminator on Bool
+     using the closure of sheaves under Sigma types
+     (trying to understand what is necessary to obtain this kind of elimination)
+
+     It does not look like a good challenger for its computational content,
+     even though in the (strict) setoid model it probably just works®
+     (that is simpl_b (ret b) ≡ eq_refl)
+   *)
+  Context J
+          (P : ShD J bool -> Type) (Pε : forall b, isSheaf J (P b))
+          (ut : P (ret true))
+          (uf : P (ret false)).
+
+  Definition P' b := P (ret b).
+  Definition Pε' b : isSheaf J (P' b) := Pε (ret b).
+  Definition pack_with_pf b :=
+    existT P (ret b) (if b as b0 return (P' b0) then ut else uf).
+
+  Definition alg := ShD_alg (sigma_sheaf J (ShD J bool) (isSheaf_ShD J bool) P Pε).
+
+  Lemma simpl_b (b : ShD J bool) : projT1 (alg (map pack_with_pf b)) = b.
+  Proof.
+    unfold alg, pack_with_pf.
+    rewrite <- (ShD_homomorphism _ (isSheaf_ShD J bool)).
+    rewrite map_cmp.
+    unfold pack_with_pf; cbn.
+    rewrite ShD_alg_free. unfold mu, map.
+    rewrite bind_assoc.
+    set (h := fun _ => _).
+    assert (h = ret) as -> by (apply funext; intros ?; unfold h; rewrite ret_bind ; reflexivity).
+    apply bind_ret.
+  Qed.
+
+  Definition bool_dep_elim'  (b : ShD J bool) : P b :=
+    eq_rect _ P (projT2 (alg (map pack_with_pf b))) b (simpl_b b).
+End Complicated_bool_dep_elim.
+
+
+
+
