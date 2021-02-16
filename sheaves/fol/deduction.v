@@ -190,6 +190,9 @@ Qed.
 
 End Std.
 
+End Std.
+
+
 Module Dynamic.
 
 Definition atomic Σ := { a : atom & fin (atom_arity a) -> term Σ }.
@@ -453,6 +456,11 @@ Proof.
 induction 1; constructor; assumption.
 Qed.
 
+(*
+Lemma In_isMon₀ :
+  forall Σ Ω ρ
+  In (subst_atomic (lift_le ρ α) a) (ctxℙ Ω') -> In (subst_atomic (lift_le ρ (β ∘ α)) a) (ctxℙ Ω'')
+*)
 Lemma InΩ_isMon : forall Σ Ω ρ (a : atomic Σ),
   isMon (fun (Ω' : ℙ) (α : Ω' ≤ Ω) => InΩ Ω ρ a Ω' α).
 Proof.
@@ -682,17 +690,49 @@ Lemma interp_alg {Σ} (A : form Σ) {Ω} ρ
 Proof.
 revert Ω ρ x; induction A; intros Ω ρ p; cbn in *.
 + refine (Dyn_bind p (fun Ω' α x => _)); cbn in *.
-  admit.
+  refine (Dyn_map (fun Ω'' β x => _) x); cbn in *.
+  unfold InΩ in *.
+  rewrite lift_le_cmp; assumption.
 + intros Ω' α x.
   apply IHA2.
-  admit.
-+ admit.
-+ admit.
-+ admit.
-+ admit.
-+ admit.
-+ admit.
-Admitted.
+  match type of p with Dyn _ ?A => unshelve refine (Dyn_bind (Dyn_isMon _ A _ _ _ ! α p) _) end.
+  { apply (interp_isMon _ (Arr A1 A2)). }
+  cbn. intros Ω'' β f; apply ret.
+  specialize (f Ω'' !).
+  rewrite <- lift_le_cmp.
+  replace ((! ∘ β) ∘ α)  with (! ∘ (β ∘ (α ∘ !))) by reflexivity.
+  rewrite lift_le_cmp; apply f.
+  assert (x' := interp_isMon _ A1 _ _ _ _ _ β x); cbn in x'.
+  rewrite <- lift_le_cmp.
+  exact x'.
++ constructor.
++ refine (Dyn_bind p (fun _ _ x => x)).
++ split.
+  - apply IHA1.
+    refine (Dyn_map (fun Ω'' β => _) p); intros [x _]; assumption.
+  - apply IHA2.
+    refine (Dyn_map (fun Ω'' β => _) p); intros [_ y]; assumption.
++ refine (Dyn_bind p (fun Ω' α x => _)).
+  refine (Dyn_map (fun Ω'' β => _) x).
+  intros [l|r]; [left|right]; rewrite lift_le_cmp; assumption.
++ intros Ω' α t.
+  apply IHA.
+  match type of p with Dyn _ ?A => unshelve refine (Dyn_bind (Dyn_isMon _ A _ _ _ ! α p) _) end.
+  { apply (interp_isMon _ (All A)). }
+  intros Ω'' β x; apply ret.
+  specialize (x _ ! (subst_term (lift_le var_term β) t)).
+  match goal with [ _ : interp A ?t |- interp A ?u ] => replace u with t end; [assumption|].
+  funext; intros [n|]; cbn.
+  - rewrite !lift_le_id.
+    change (β ∘ (α ∘ !)) with (β ∘ α).
+    rewrite lift_le_cmp.
+    reflexivity.
+  - reflexivity.
++ refine (Dyn_bind p (fun Ω' α p => _)); cbn in *.
+  refine (Dyn_map (fun Ω'' β p => _) p); cbn in *.
+  destruct p as [t Ht]; exists t.
+  rewrite lift_le_cmp; assumption.
+Qed.
 
 Lemma interp_nAll : forall Σ (A : form Σ) Ω (ρ : fin 0 -> term Ω.(idxℙ)),
   (forall Ω' (α : Ω' ≤ Ω) σ, @interp Σ A Ω' σ) -> interp (nAll Σ A) ρ.
@@ -741,9 +781,14 @@ intros Σ Φ; induction Φ as [|[a args] Φ IHΦ]; intros Ω ρ p; cbn in *.
   apply IHΦ in p.
   refine (Dyn_bind p _); clear p; intros Ω' α p.
   unshelve refine (Dyn_bind (Dyn_isMon _ _ _ _ _ ! α x) _); clear x.
-  - apply InΩ_isMon.
-  - admit.
-Admitted.
+  { apply InΩ_isMon. }
+  intros Ω'' β x; apply ret; constructor.
+  - apply x.
+  - simple refine (Forall_map _ _ p).
+    cbn; clear - T; intros a.
+    intros H.
+    apply InΩ_isMon, H.
+Qed.
 
 Lemma interp_geometric_axiom :
   forall (i : gthy_idx T) (Ω : ℙ) (ρ : fin 0 -> term (idxℙ Ω)),
@@ -760,14 +805,13 @@ unshelve refine (ask _ _ i (lift_le σ β) _ _); fold φ.
 - revert H.
   set (Φ := geom_hyp φ); clearbody Φ;
   set (Σ' := geom_ctx φ) in *; clearbody Σ'; clear.
-  { induction Φ as [|A Φ]; cbn; intro H; constructor.
-    + intros Ω''' δ; unfold InΩ.
-      rewrite <- lift_le_cmp.
-      destruct H as [H _]; destruct A as [a args]; cbn in *.
-      
-      admit.
-    + apply IHΦ, H.
-  }
+  intros HΦ.
+  apply interp_nCnj_of in HΦ.
+  induction Φ as [|φ Φ IHΦ]; constructor.
+  * intros Ω''' γ. admit.
+  * apply IHΦ.
+    refine (Dyn_map _ HΦ); cbn.
+    intros ? ? H; inversion H; assumption.
 - intros o ψ Ω''' δ.
   apply ret; apply interp_nSplit with o.
   fold ψ; destruct ψ as [Σ' Φ]; cbn.
@@ -845,5 +889,7 @@ intros Σ Γ A Ω ρ π; revert Ω ρ; induction π; intros Ω ρ γ; cbn in *.
   specialize (IHπ2 Ω' (t .: lift_le ρ α)).
   admit.
 Admitted.
+
+End Interp.
 
 End Dynamic.
