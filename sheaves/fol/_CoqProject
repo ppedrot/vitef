@@ -4,4 +4,5 @@ fintype.v
 header_extensible.v
 unscoped.v
 syntax.v
+syntax2.v
 deduction.v
