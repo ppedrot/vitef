@@ -1,5 +1,5 @@
 Require List.
-Require Import syntax2.
+Require Import syntax.
 
 Set Primitive Projections.
 
