@@ -19,6 +19,9 @@ Inductive seq (A : Type) : nat -> Type :=
 | seq0 : seq A 0
 | seqS : forall n, A -> seq A n -> seq A (S n).
 
+Notation null := seq0.
+Notation scons := seqS.
+
 Arguments seq0 {_}.
 Arguments seqS {_ _}.
 
@@ -221,6 +224,9 @@ induction m; intros n v w p; cbn in *.
   apply IHm.
 Qed.
 
+Notation scons_p := seq_app.
+
+
 Section term.
 
 
@@ -276,8 +282,6 @@ simple refine (seqS ((var_term (S nterm)) (var_zero)) _).
 simple refine (seq_map (subst_term _) sigma).
 refine (seq_init (funcomp (var_term _) shift)).
 Defined.
-
-Notation scons_p := seq_app.
 
 Definition upList_term_term (p : nat) { m : nat } { nterm : nat } (sigma : seq (term (nterm)) m) : seq (term (p+ nterm)) (p + m).
 Proof.
@@ -473,3 +477,5 @@ Arguments Dsj {nterm}.
 Arguments All {nterm}.
 
 Arguments Exs {nterm}.
+
+Notation "σ >> τ" := (seq_map (subst_term τ) σ) (at level 50, only parsing).
