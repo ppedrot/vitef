@@ -588,18 +588,7 @@ unfold funcomp; cbn.
 rewrite nth_map; cbn.
 unfold lift_le; rewrite !nth_map, !compComp_term, !map_init.
 f_equal; apply nth_ext; intros p; rewrite !nth_init; cbn; rewrite !nth_init; f_equal.
-set (q := (lift_fin (le_to α) p)); clearbody q; clear.
-set (β₀ := le_to β); clearbody β₀; clear; rename β₀ into α, q into p.
-refine (
-  match α in extends _ Ω₀ return
-    forall (e : idxℙ Ω₀ = _),
-    shift_p Σ' p = transp _ e (lift_fin α p)
-  with
-  | Extends _ Σα Ωα => fun e => _
-  end eq_refl
-); simpl in *; clear.
-assert (e' : Σα = Σ') by Lia.lia; destruct e'.
-rewrite (nat_uip _ _ e eq_refl); reflexivity.
+rewrite lift_fin_red; reflexivity.
 Qed.
 
 Inductive Dyn (Ω : ℙ) (A : forall Ω', Ω' ≤ Ω -> Type) :=
