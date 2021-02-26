@@ -1,3 +1,4 @@
 -R . fol
+seq.v
 syntax.v
 deduction.v

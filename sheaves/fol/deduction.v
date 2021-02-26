@@ -1,5 +1,5 @@
 Require List Eqdep_dec Lia.
-Require Import syntax.
+Require Import seq syntax.
 
 Lemma nat_uip : forall (m n : nat) (p q : m = n), p = q.
 Proof.
