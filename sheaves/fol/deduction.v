@@ -19,7 +19,7 @@ Inductive In {A} (x : A) : list A -> Type :=
 | In_next : forall y l, In x l -> In x (cons y l).
 
 Definition lift_form {Σ : nat} (A : form Σ) : form (S Σ) :=
-  subst_form (seq_init (fun n => @var_term (S _) (Some n))) A.
+  subst_form (init (fun n => @var_term (S _) (Some n))) A.
 
 Inductive proof (T : Theory) (Σ : nat) (Γ : list (form Σ)) : form Σ -> Type :=
 | prf_thy :
@@ -49,10 +49,10 @@ Inductive proof (T : Theory) (Σ : nat) (Γ : list (form Σ)) : form Σ -> Type 
   forall (A : form (S Σ)), proof T (S Σ) (List.map lift_form Γ) A -> proof T Σ Γ (All A) 
 | prf_frl_e :
   forall (A : form (S Σ)) (t : term Σ), proof T Σ Γ (All A) ->
-  proof T Σ Γ (subst_form (scons t (seq_init var_term)) A)
+  proof T Σ Γ (subst_form (scons t (init var_term)) A)
 | prf_exs_i :
   forall (A : form (S Σ)) (t : term Σ),
-  proof T Σ Γ (subst_form (scons t (seq_init var_term)) A) -> proof T Σ Γ (Exs A)
+  proof T Σ Γ (subst_form (scons t (init var_term)) A) -> proof T Σ Γ (Exs A)
 | prf_exs_e :
   forall (A : form (S Σ)) (B : form Σ),
   proof T Σ Γ (Exs A) ->
@@ -62,7 +62,7 @@ Inductive proof (T : Theory) (Σ : nat) (Γ : list (form Σ)) : form Σ -> Type 
 
 
 Lemma map_init_eta : forall Σ Σ' t (ρ : seq (term Σ) Σ'),
-  seq_init (funcomp var_term shift) >> scons t ρ = ρ.
+  init (funcomp var_term shift) >> scons t ρ = ρ.
 Proof.
 intros.
 rewrite map_init; apply nth_ext; intros n.
@@ -70,7 +70,7 @@ rewrite nth_init; reflexivity.
 Qed.
 
 Lemma map_init_eta_p : forall Σ Σ'' Σ' σ (ρ : seq (term Σ) Σ'),
-  seq_init (funcomp var_term (shift_p Σ'')) >> seq_app σ ρ = ρ.
+  init (funcomp var_term (shift_p Σ'')) >> seq_app σ ρ = ρ.
 Proof.
 intros.
 apply nth_ext; intros p; rewrite nth_map, nth_init.
@@ -176,7 +176,7 @@ induction 1; intros γ; cbn.
 + exists (subst_term ρ t).
   specialize (IHπ ρ γ).
   apply interp_subst in IHπ.
-  match goal with [ |- interp ?s _ ] => replace s with ((scons t (seq_init var_term)) >> ρ); [assumption|] end.
+  match goal with [ |- interp ?s _ ] => replace s with ((scons t (init var_term)) >> ρ); [assumption|] end.
   apply nth_ext; intros [m|]; simpl; [|reflexivity].
   rewrite varL_term; reflexivity.
 + specialize (IHπ1 ρ γ); destruct IHπ1 as [t Ht].
@@ -215,7 +215,7 @@ match a with
 end.
 
 Definition nlift_atomic {Σ} Σ' (a : atomic Σ) : atomic (Σ' + Σ) :=
-  subst_atomic (seq_init (funcomp var_term (shift_p Σ'))) a.
+  subst_atomic (init (funcomp var_term (shift_p Σ'))) a.
 
 Definition mAtm {Σ} (a : atomic Σ) : form Σ :=
 match a with existT _ α args => Atm α args end.
@@ -312,11 +312,11 @@ match goal with [ |- context [ List.map ?f ?v ] ] =>
   unshelve erewrite (List.map_ext f (transp (fun n => _ -> atomic n) e (fun x => nlift_atomic (Σ' + Σ) x)) _ v)
 end.
 { clear; unfold nlift_atomic; intros [a args]; cbn.
-  transitivity (existT (fun a => seq (term _) _) a (transp (fun n => seq (term n) _) e (seq_map (subst_term (seq_init (funcomp var_term (shift_p (Σ' + Σ))))) args))).
+  transitivity (existT (fun a => seq (term _) _) a (transp (fun n => seq (term n) _) e (map (subst_term (init (funcomp var_term (shift_p (Σ' + Σ))))) args))).
   2: { destruct e; reflexivity. }
   f_equal; apply nth_ext; intros p.
   rewrite !nth_map, compComp_term, !map_init.
-  transitivity (nth ((seq_map (subst_term (seq_init (transp (fun n => _ -> term n) e (funcomp var_term (shift_p (Σ' + Σ)))))) args)) p).
+  transitivity (nth ((map (subst_term (init (transp (fun n => _ -> term n) e (funcomp var_term (shift_p (Σ' + Σ)))))) args)) p).
   2: { destruct e; reflexivity. }
   rewrite nth_map; f_equal.
   apply nth_ext; clear p; intro p; rewrite !nth_init.
@@ -427,7 +427,7 @@ end.
 
 Definition lift_le {Σ Ω Ω'} (ρ : seq (term Ω.(idxℙ)) Σ) (α : Ω' ≤ Ω) : seq (term Ω'.(idxℙ)) Σ.
 Proof.
-refine (ρ >> seq_init _).
+refine (ρ >> init _).
 refine (fun n => var_term (lift_fin (le_to α) n)).
 Defined.
 
@@ -781,7 +781,7 @@ revert Ω Ω' α ρ x; induction A; intros Ω Ω' α ρ x; cbn in *.
   end.
   { clear - IHA; intros Ω' Ω'' α β [t Ht].
     apply (IHA _ _ β) in Ht.
-    exists (subst_term (lift_le (seq_init var_term) β) t).
+    exists (subst_term (lift_le (init var_term) β) t).
     match goal with [ H : interp A ?t |- interp A ?u ] =>
       replace u with t; [exact H|]
     end.
@@ -831,7 +831,7 @@ revert Ω ρ x; induction A; intros Ω ρ p; cbn in *.
   match type of p with Dyn _ ?A => unshelve refine (Dyn_bind (Dyn_isMon _ A _ _ _ ! α p) _) end.
   { apply (interp_isMon _ (All A)). }
   intros Ω'' β x; apply ret.
-  specialize (x _ ! (subst_term (lift_le (seq_init var_term) β) t)).
+  specialize (x _ ! (subst_term (lift_le (init var_term) β) t)).
   match goal with [ _ : interp A ?t |- interp A ?u ] => replace u with t end; [assumption|].
   apply nth_ext; intros [n|]; cbn.
   - rewrite !lift_le_id.
@@ -936,7 +936,7 @@ unshelve refine (ask _ _ i (lift_le σ (γ ∘ β)) _ _); fold φ.
   fold ψ; destruct ψ as [Σ' Φ]; cbn.
   rewrite <- !lift_le_cmp.
   match goal with [ |- context [ scons_p _ (lift_le _ ?α) ] ] => set (υ := α); clearbody υ end.
-  exists (seq_init (fun p => var_term (zero_p _ p))).
+  exists (init (fun p => var_term (zero_p _ p))).
   apply interp_nCnj_to; apply Forall_of_nth; intros j.
   unfold enrich; simpl.
   apply In_app_l.

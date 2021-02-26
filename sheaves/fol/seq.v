@@ -14,7 +14,7 @@ Inductive seq (A : Type) : nat -> Type :=
 Arguments seq0 {_}.
 Arguments seqS {_ _}.
 
-Definition seq_map {A B : Type} {n : nat} (f : A -> B) (v : seq A n) : seq B n :=
+Definition map {A B : Type} {n : nat} (f : A -> B) (v : seq A n) : seq B n :=
 (fix F n (v : seq A n) :=
 match v in seq _ n return seq B n with
 | seq0 => seq0
@@ -22,27 +22,27 @@ match v in seq _ n return seq B n with
 end) n v.
 
 Lemma seq_map_map : forall {A B C} (n : nat) (f : A -> B) (g : B -> C) (v : seq A n),
-  seq_map g (seq_map f v) = seq_map (fun x => g (f x)) v.
+  map g (map f v) = map (fun x => g (f x)) v.
 Proof.
 induction v; cbn; [reflexivity|].
 f_equal; apply IHv.
 Qed.
 
 Lemma seq_map_ext : forall {A B} (n : nat) (f g : A -> B) (v : seq A n),
-  (forall x : A, f x = g x) -> seq_map f v = seq_map g v.
+  (forall x : A, f x = g x) -> map f v = map g v.
 Proof.
 induction v; intros H; cbn; [reflexivity|].
 f_equal; [apply H|]; apply IHv, H.
 Qed.
 
-Fixpoint seq_init {A} {n : nat} (f : fin n -> A) : seq A n :=
+Fixpoint init {A} {n : nat} (f : fin n -> A) : seq A n :=
 match n return (fin n -> A) -> seq A n with
 | 0 => fun _ => seq0
-| S n => fun f => seqS (f fin0) (@seq_init A n (fun p => f (finS p)))
+| S n => fun f => seqS (f fin0) (@init A n (fun p => f (finS p)))
 end f.
 
 Lemma map_init : forall A B n (f : fin n -> A) (g : A -> B),
-  seq_map g (seq_init f) = seq_init (fun p => g (f p)).
+  map g (init f) = init (fun p => g (f p)).
 Proof.
 induction n; intros f g; simpl; [reflexivity|].
 f_equal; apply IHn.
@@ -138,7 +138,7 @@ match v in seq _ n return fin n -> A with
   end
 end.
 
-Lemma nth_init : forall A (n : nat) (f : fin n -> A) p, nth (seq_init f) p = f p.
+Lemma nth_init : forall A (n : nat) (f : fin n -> A) p, nth (init f) p = f p.
 Proof.
 induction n; cbn.
 + intros f [].
@@ -147,7 +147,7 @@ induction n; cbn.
 Qed.
 
 Lemma nth_map : forall A B (n : nat) (f : A -> B) (v : seq A n) (p : fin n),
-  nth (seq_map f v) p = f (nth v p).
+  nth (map f v) p = f (nth v p).
 Proof.
 induction v; cbn.
 + intros [].

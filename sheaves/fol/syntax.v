@@ -54,7 +54,7 @@ Definition term_ind (n : nat) (P : term n -> Type)
 Fixpoint subst_term { mterm : nat } { nterm : nat } (sigmaterm : seq (term (nterm)) mterm)  (s : term (mterm)) {struct s} : term (nterm) :=
 match s with
 | var_term (_) s => nth sigmaterm s
-| App (_) s s0 => App (nterm) s (seq_map (subst_term sigmaterm) s0)
+| App (_) s s0 => App (nterm) s (map (subst_term sigmaterm) s0)
 end.
 
 Definition funcomp {A B C} (g : B -> C) (f : A -> B) (x : A) : C := g (f x).
@@ -62,16 +62,16 @@ Definition funcomp {A B C} (g : B -> C) (f : A -> B) (x : A) : C := g (f x).
 Definition up_term_term { m : nat } { nterm : nat } (sigma : seq (term nterm) m) : seq (term (S nterm)) (S m).
 Proof.
 simple refine (seqS ((var_term (S nterm)) (var_zero)) _).
-simple refine (seq_map (subst_term _) sigma).
-refine (seq_init (funcomp (var_term _) shift)).
+simple refine (map (subst_term _) sigma).
+refine (init (funcomp (var_term _) shift)).
 Defined.
 
 Definition upList_term_term (p : nat) { m : nat } { nterm : nat } (sigma : seq (term (nterm)) m) : seq (term (p+ nterm)) (p + m).
 Proof.
 simple refine (scons_p _ _).
-+ refine (seq_init (((funcomp) (var_term (p+ nterm)) (zero_p p)))).
-+ refine (seq_map _ sigma).
-  refine ((subst_term (seq_init ((funcomp) (var_term (_)) (shift_p p))))).
++ refine (init (((funcomp) (var_term (p+ nterm)) (zero_p p)))).
++ refine (map _ sigma).
+  refine ((subst_term (init ((funcomp) (var_term (_)) (shift_p p))))).
 Defined.
 
 Definition upId_term_term { mterm : nat }
@@ -114,7 +114,7 @@ Lemma compSubstSubst_term { kterm : nat } { lterm : nat } { mterm : nat }
   (sigmaterm : seq (term (kterm)) mterm)
   (tauterm : seq  (term (lterm)) kterm)
   (thetaterm : seq (term (lterm)) mterm)
-  (Eqterm : seq_map (subst_term tauterm) sigmaterm = thetaterm)
+  (Eqterm : map (subst_term tauterm) sigmaterm = thetaterm)
   (s : term (mterm)) :
     subst_term tauterm (subst_term sigmaterm s) = subst_term thetaterm s.
 Proof.
@@ -128,8 +128,8 @@ Definition up_subst_subst_term_term { k : nat } { lterm : nat } { mterm : nat }
   (sigma : seq (term (lterm)) k)
   (tauterm : seq  (term (mterm)) lterm)
   (theta : seq (term (mterm)) k)
-  (Eq : (seq_map (subst_term tauterm) sigma) = theta) :
-  (seq_map (subst_term (up_term_term tauterm)) (up_term_term sigma)) = (up_term_term theta).
+  (Eq : (map (subst_term tauterm) sigma) = theta) :
+  (map (subst_term (up_term_term tauterm)) (up_term_term sigma)) = (up_term_term theta).
 Proof.
 apply nth_ext; intros [p|].
 + rewrite nth_map; simpl.
@@ -147,8 +147,8 @@ Definition up_subst_subst_list_term_term { p : nat } { k : nat } { lterm : nat }
   (sigma : seq (term (lterm)) k)
   (tauterm : seq (term (mterm)) lterm)
   (theta : seq (term (mterm)) k)
-  (Eq : (seq_map (subst_term tauterm) sigma) = theta) :
-  (seq_map (subst_term (upList_term_term p tauterm)) (upList_term_term p sigma)) = (upList_term_term p theta).
+  (Eq : (map (subst_term tauterm) sigma) = theta) :
+  (map (subst_term (upList_term_term p tauterm)) (upList_term_term p sigma)) = (upList_term_term p theta).
 Proof.
 apply nth_ext; apply fin_add_rect; intros q.
 + rewrite nth_map.
@@ -167,7 +167,7 @@ Qed.
 
 Lemma varL_term { mterm : nat } { nterm : nat }
   (sigmaterm : seq (term (nterm)) mterm) :
-    seq_map (subst_term sigmaterm) (seq_init (var_term (mterm))) = sigmaterm.
+    map (subst_term sigmaterm) (init (var_term (mterm))) = sigmaterm.
 Proof.
 rewrite map_init; apply nth_ext; intros p; rewrite nth_init; reflexivity.
 Qed.
@@ -176,7 +176,7 @@ Lemma compComp_term { kterm : nat } { lterm : nat } { mterm : nat }
   (sigmaterm : seq (term (kterm)) mterm)
   (tauterm : seq (term (lterm)) kterm)
   (s : term (mterm)) :
-    subst_term tauterm (subst_term sigmaterm s) = subst_term (seq_map (subst_term tauterm) sigmaterm) s.
+    subst_term tauterm (subst_term sigmaterm s) = subst_term (map (subst_term tauterm) sigmaterm) s.
 Proof.
 apply compSubstSubst_term; reflexivity.
 Qed.
@@ -198,7 +198,7 @@ Inductive form (nterm : nat) : Type :=
 
 Fixpoint subst_form { mterm : nat } { nterm : nat } (sigmaterm : seq (term (nterm)) mterm) (s : form (mterm)) : form (nterm) :=
     match s with
-    | Atm (_) a s0 => Atm (nterm) a ((seq_map (subst_term sigmaterm)) s0)
+    | Atm (_) a s0 => Atm (nterm) a ((map (subst_term sigmaterm)) s0)
     | Arr (_) s0 s1 => Arr (nterm) ((subst_form sigmaterm) s0) ((subst_form sigmaterm) s1)
     | Top (_)  => Top (nterm)
     | Bot (_)  => Bot (nterm)
@@ -224,7 +224,7 @@ Lemma compSubstSubst_form { kterm : nat } { lterm : nat } { mterm : nat }
   (sigmaterm : seq (term (kterm)) mterm)
   (tauterm : seq (term (lterm)) kterm)
   (thetaterm : seq (term (lterm)) mterm)
-  (Eqterm : (seq_map (subst_term tauterm) sigmaterm) = thetaterm)
+  (Eqterm : (map (subst_term tauterm) sigmaterm) = thetaterm)
   (s : form (mterm)) :
     subst_form tauterm (subst_form sigmaterm s) = subst_form thetaterm s.
 Proof.
@@ -261,4 +261,4 @@ Arguments All {nterm}.
 
 Arguments Exs {nterm}.
 
-Notation "σ >> τ" := (seq_map (subst_term τ) σ) (at level 50, only parsing).
+Notation "σ >> τ" := (map (subst_term τ) σ) (at level 50, only parsing).
