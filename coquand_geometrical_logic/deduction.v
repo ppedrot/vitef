@@ -27,6 +27,8 @@ Definition lift_form {Σ : nat} (A : form Σ) : form (S Σ) :=
   subst_form (init (fun n => @var_term _ (S _) (Some n))) A.
 
 Inductive proof (T : Theory) (Σ : nat) (Γ : list (form Σ)) : form Σ -> Type :=
+| prf_exm :
+  forall A, Sig.(sig_classical) = true -> proof T Σ Γ (Dsj A (Arr A Bot))
 | prf_thy :
   forall (i : T.(thy_idx)),
   proof T Σ Γ (subst_form null (T.(thy_axm) i))

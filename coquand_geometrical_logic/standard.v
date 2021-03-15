@@ -3,6 +3,7 @@ Require Import seq syntax deduction.
 Section Std.
 
 Context {Sig : sig}.
+Hypothesis Sig_intuitionistic : Sig.(sig_classical) = false.
 
 Notation symb := Sig.(sig_symb).
 Notation symb_arity := Sig.(sig_symb_arity).
@@ -74,6 +75,7 @@ Lemma interp_sound : forall Σ (ρ : env Σ) Γ (A : form Σ) (π : proof T Σ �
   List.Forall (fun A => interp ρ A) Γ -> interp ρ A.
 Proof.
 induction 1; intros γ; cbn.
++ exfalso; congruence.
 + apply interp_subst.
   simpl; apply T_sound.
 + clear - i γ; induction i.

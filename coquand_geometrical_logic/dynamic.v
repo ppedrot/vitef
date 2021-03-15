@@ -5,6 +5,8 @@ Set Primitive Projections.
 Section dynamic.
 
 Context {Sig : sig}.
+Hypothesis Sig_intuitionistic : Sig.(sig_classical) = false.
+
 Notation symb := Sig.(sig_symb).
 Notation symb_arity := Sig.(sig_symb_arity).
 Notation atom := Sig.(sig_atom).
@@ -768,6 +770,7 @@ Lemma interp_sound : forall Σ Γ (A : form Σ) Ω (ρ : seq (term Ω.(idxℙ)) 
   proof (of_gtheory T) Σ Γ A -> Forall (fun X => interp X ρ) Γ -> interp A ρ.
 Proof.
 intros Σ Γ A Ω ρ π; revert Ω ρ; induction π; intros Ω ρ γ; cbn in *.
++ exfalso; congruence.
 + apply interp_subst.
   apply interp_geometric_axiom.
 + induction i; cbn in *.

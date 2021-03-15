@@ -13,6 +13,7 @@ Record sig := {
   sig_symb_arity : sig_symb -> nat;
   sig_atom : Set;
   sig_atom_arity : sig_atom -> nat;
+  sig_classical : bool;
 }.
 
 Section term.
