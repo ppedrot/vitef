@@ -9,6 +9,11 @@ Qed.
 
 Set Primitive Projections.
 
+Section syntax.
+
+Context {Sig : sig}.
+Notation form := (@form Sig).
+
 Record Theory := {
   thy_idx : Set;
   thy_axm : forall i : thy_idx, form 0;
@@ -19,7 +24,7 @@ Inductive In {A} (x : A) : list A -> Type :=
 | In_next : forall y l, In x l -> In x (cons y l).
 
 Definition lift_form {Σ : nat} (A : form Σ) : form (S Σ) :=
-  subst_form (init (fun n => @var_term (S _) (Some n))) A.
+  subst_form (init (fun n => @var_term _ (S _) (Some n))) A.
 
 Inductive proof (T : Theory) (Σ : nat) (Γ : list (form Σ)) : form Σ -> Type :=
 | prf_thy :
@@ -60,11 +65,12 @@ Inductive proof (T : Theory) (Σ : nat) (Γ : list (form Σ)) : form Σ -> Type 
   proof T Σ Γ B
 .
 
-
-Lemma map_init_eta : forall Σ Σ' t (ρ : seq (term Σ) Σ'),
+Lemma map_init_eta : forall Σ Σ' t (ρ : seq (@term Sig Σ) Σ'),
   init (funcomp var_term shift) >> scons t ρ = ρ.
 Proof.
 intros.
 rewrite map_init; apply nth_ext; intros n.
 rewrite nth_init; reflexivity.
 Qed.
+
+End syntax.

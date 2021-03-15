@@ -2,6 +2,16 @@ Require Import seq syntax deduction.
 
 Set Primitive Projections.
 
+Section dynamic.
+
+Context {Sig : sig}.
+Notation symb := Sig.(sig_symb).
+Notation symb_arity := Sig.(sig_symb_arity).
+Notation atom := Sig.(sig_atom).
+Notation atom_arity := Sig.(sig_atom_arity).
+Notation term := (@term Sig).
+Notation form := (@form Sig).
+
 Definition atomic Σ := { a : atom & seq (term Σ) (atom_arity a) }.
 
 Definition subst_atomic {Σ Σ' : nat} (σ : seq (term Σ') Σ) (a : atomic Σ) : atomic Σ' :=
@@ -116,7 +126,7 @@ end.
   rewrite nth_map; f_equal.
   apply nth_ext; clear p; intro p; rewrite !nth_init.
   unfold funcomp; simpl; rewrite nth_init.
-  transitivity (var_term (transp _ e (shift_p (Σ' + Σ) p))).
+  transitivity (@var_term Sig _ (transp _ e (shift_p (Σ' + Σ) p))).
   2:{ destruct e; reflexivity. }
   f_equal.
   induction Σ'; cbn in *.
@@ -802,7 +812,7 @@ intros Σ Γ A Ω ρ π; revert Ω ρ; induction π; intros Ω ρ γ; cbn in *.
   refine (Forall_map_nat _ _ _).
   refine (Forall_map (fun A x => _) _ γ); cbn in x.
   apply interp_subst.
-  rewrite map_init_eta.
+  rewrite (@map_init_eta Sig).
   unshelve refine (interp_isMon _ _ _ _ _ _ ! _ _).
   rewrite lift_le_id.
   assumption.
@@ -828,7 +838,7 @@ intros Σ Γ A Ω ρ π; revert Ω ρ; induction π; intros Ω ρ γ; cbn in *.
   { apply Forall_map_nat.
     refine (Forall_map _ _ γ).
     clear. intros X x.
-    apply interp_subst; rewrite map_init_eta.
+    apply interp_subst; rewrite (@map_init_eta Sig).
     unshelve refine (interp_isMon _ _ _ _ _ _ ! _ _).
     rewrite lift_le_id; assumption.
   }
@@ -840,3 +850,4 @@ Qed.
 
 End Interp.
 
+End dynamic.

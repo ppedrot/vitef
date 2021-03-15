@@ -1,9 +1,17 @@
 Require Import seq syntax deduction.
 
-Definition env (Σ : nat) := seq (term 0) Σ.
-
 Section Std.
 
+Context {Sig : sig}.
+
+Notation symb := Sig.(sig_symb).
+Notation symb_arity := Sig.(sig_symb_arity).
+Notation atom := Sig.(sig_atom).
+Notation atom_arity := Sig.(sig_atom_arity).
+Notation term := (@term Sig).
+
+
+Definition env (Σ : nat) := seq (term 0) Σ.
 Variable ATOM : forall α : atom, (seq (term 0) (atom_arity α)) -> Prop.
 
 Fixpoint interp {Σ : nat} (ρ : env Σ) (A : form Σ) : Prop :=
@@ -58,7 +66,7 @@ induction A; cbn in *; intros Σ ρ σ.
     rewrite seq_map_map, !nth_map, compComp_term, map_init_eta; reflexivity.
 Qed.
 
-Variable T : Theory.
+Variable T : @Theory Sig.
 
 Variable T_sound : forall (i : T.(thy_idx)), interp null (T.(thy_axm) i).
 
@@ -87,7 +95,7 @@ induction 1; intros γ; cbn.
   clear - H.
   apply <- interp_subst.
   match goal with [ |- interp ?s _ ] => replace s with ρ; [assumption|] end.
-  rewrite map_init_eta; reflexivity.
+  rewrite (@map_init_eta Sig); reflexivity.
 + cbn in IHπ.
   apply interp_subst; simpl.
   specialize (IHπ ρ γ (subst_term ρ t)).
@@ -106,12 +114,12 @@ induction 1; intros γ; cbn.
   { clear - γ; induction γ; cbn in *; constructor.
     - unfold lift_form.
       apply interp_subst; cbn.
-      rewrite map_init_eta; apply H.
+      rewrite (@map_init_eta Sig); apply H.
     - intuition.
   }
   specialize (IHπ2 H).
   unfold lift_form in IHπ2; apply interp_subst in IHπ2.
-  rewrite map_init_eta in IHπ2; apply IHπ2.
+  rewrite (@map_init_eta Sig) in IHπ2; apply IHπ2.
 Qed.
 
 Lemma proof_consistent : proof T 0 nil Bot -> False.

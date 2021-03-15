@@ -6,12 +6,23 @@ Notation null := seq0.
 Notation scons := seqS.
 Notation scons_p := seq_app.
 
-Axiom symb : Set.
-Axiom symb_arity : symb -> nat.
-Axiom atom : Set.
-Axiom atom_arity : atom -> nat.
+Set Primitive Projections.
+
+Record sig := {
+  sig_symb : Set;
+  sig_symb_arity : sig_symb -> nat;
+  sig_atom : Set;
+  sig_atom_arity : sig_atom -> nat;
+}.
 
 Section term.
+
+Context {Sig : sig}.
+
+Notation symb := Sig.(sig_symb).
+Notation symb_arity := Sig.(sig_symb_arity).
+Notation atom := Sig.(sig_atom).
+Notation atom_arity := Sig.(sig_atom_arity).
 
 Unset Elimination Schemes.
 Inductive term (nterm : nat) : Type :=
@@ -181,10 +192,6 @@ Proof.
 apply compSubstSubst_term; reflexivity.
 Qed.
 
-End term.
-
-Section form.
-
 Inductive form (nterm : nat) : Type :=
   | Atm
   : forall (a : atom), seq (term  (nterm)) (atom_arity a) -> form (nterm)
@@ -239,26 +246,17 @@ simpl; f_equal; try match goal with [ H : _ |- _] => solve [apply H; assumption]
   apply up_subst_subst_term_term, Eqterm.
 Qed.
 
-End form.
+End term.
 
-Arguments var_term {nterm}.
-
-Arguments App {nterm}.
-
-Arguments Atm {nterm}.
-
-Arguments Arr {nterm}.
-
-Arguments Top {nterm}.
-
-Arguments Bot {nterm}.
-
-Arguments Cnj {nterm}.
-
-Arguments Dsj {nterm}.
-
-Arguments All {nterm}.
-
-Arguments Exs {nterm}.
+Arguments var_term {_ nterm}.
+Arguments App {_ nterm}.
+Arguments Atm {_ nterm}.
+Arguments Arr {_ nterm}.
+Arguments Top {_ nterm}.
+Arguments Bot {_ nterm}.
+Arguments Cnj {_ nterm}.
+Arguments Dsj {_ nterm}.
+Arguments All {_ nterm}.
+Arguments Exs {_ nterm}.
 
 Notation "σ >> τ" := (map (subst_term τ) σ) (at level 50, only parsing).
