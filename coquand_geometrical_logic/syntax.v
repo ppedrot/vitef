@@ -9,9 +9,9 @@ Notation scons_p := seq_app.
 Set Primitive Projections.
 
 Record sig := {
-  sig_symb : Set;
+  sig_symb : Type;
   sig_symb_arity : sig_symb -> nat;
-  sig_atom : Set;
+  sig_atom : Type;
   sig_atom_arity : sig_atom -> nat;
   sig_classical : bool;
 }.
@@ -247,6 +247,15 @@ simpl; f_equal; try match goal with [ H : _ |- _] => solve [apply H; assumption]
   apply up_subst_subst_term_term, Eqterm.
 Qed.
 
+Lemma compComp_form { kterm : nat } { lterm : nat } { mterm : nat }
+  (sigmaterm : seq (term (kterm)) mterm)
+  (tauterm : seq (term (lterm)) kterm)
+  (s : form (mterm)) :
+    subst_form tauterm (subst_form sigmaterm s) = subst_form (map (subst_term tauterm) sigmaterm) s.
+Proof.
+apply compSubstSubst_form; reflexivity.
+Qed.
+
 End term.
 
 Arguments var_term {_ nterm}.
@@ -261,3 +270,11 @@ Arguments All {_ nterm}.
 Arguments Exs {_ nterm}.
 
 Notation "σ >> τ" := (map (subst_term τ) σ) (at level 50, only parsing).
+
+Lemma map_init_eta : forall {Sig : sig} Σ Σ' t (ρ : seq (@term Sig Σ) Σ'),
+  init (funcomp var_term shift) >> scons t ρ = ρ.
+Proof.
+intros.
+rewrite map_init; apply nth_ext; intros n.
+rewrite nth_init; reflexivity.
+Qed.

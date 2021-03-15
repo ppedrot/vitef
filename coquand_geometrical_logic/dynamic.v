@@ -59,7 +59,7 @@ Definition of_geometric (G : geometric) : form 0 :=
   nAll G.(geom_ctx) (Arr (nCnj G.(geom_hyp)) (nSplit G.(geom_ccl))).
 
 Record GTheory := {
-  gthy_idx : Set;
+  gthy_idx : Type;
   gthy_axm : forall (i : gthy_idx), geometric;
 }.
 
@@ -198,6 +198,11 @@ match l return fin (length l) -> A with
   | Some i => nth l i
   end
 end i.
+
+Lemma In_nth : forall A (l : list A) (i : fin (length l)), In (nth l i) l.
+Proof.
+induction l; intros i; destruct i; simpl; constructor; intuition.
+Qed.
 
 Lemma Forall_of_nth : forall A P (l : list A),
   (forall i : fin (length l), P (nth l i)) -> Forall P l.
@@ -350,30 +355,6 @@ Qed.
 
 Definition InΩ {Σ} Ω (ρ : seq (term Ω.(idxℙ)) Σ) (a : atomic Σ) Ω' (α : Ω' ≤ Ω) :=
  In (subst_atomic (lift_le ρ α) a) Ω'.(ctxℙ).
-
-Lemma In_app_l : forall (A : Type) (l1 l2 : list A) (x : A),
-  In x l1 -> In x (app l1 l2).
-Proof.
-intros A l1 l2 x H; revert l2; induction H; intros l2; simpl; constructor; intuition.
-Qed.
-
-Lemma In_app_r : forall (A : Type) (l1 l2 : list A) (x : A),
-  In x l2 -> In x (app l1 l2).
-Proof.
-induction l1; intros l2 x H; cbn in *; [assumption|].
-constructor; apply IHl1, H.
-Qed.
-
-Lemma In_map : forall (A B : Type) (f : A -> B) (l : list A) (x : A),
-  In x l -> In (f x) (List.map f l).
-Proof.
-induction 1; constructor; assumption.
-Qed.
-
-Lemma In_nth : forall A (l : list A) (i : fin (length l)), In (nth l i) l.
-Proof.
-induction l; intros i; destruct i; simpl; constructor; intuition.
-Qed.
 
 Lemma InΩ_isMon : forall Σ Ω ρ (a : atomic Σ),
   isMon (fun (Ω' : ℙ) (α : Ω' ≤ Ω) => InΩ Ω ρ a Ω' α).
