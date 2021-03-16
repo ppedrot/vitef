@@ -113,7 +113,8 @@ induction 1; intros γ; cbn.
 + specialize (IHπ1 ρ γ); destruct IHπ1 as [t Ht].
   specialize (IHπ2 (scons t ρ)).
   match type of IHπ2 with ?T -> _ => assert T end.
-  { clear - γ; induction γ; cbn in *; constructor.
+  { constructor; [assumption|].
+    clear - γ; induction γ; cbn in *; constructor.
     - unfold lift_form.
       apply interp_subst; cbn.
       rewrite (@map_init_eta Sig); apply H.

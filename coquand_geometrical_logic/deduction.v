@@ -26,6 +26,19 @@ induction l1; intros l2 x H; cbn in *; [assumption|].
 constructor; apply IHl1, H.
 Qed.
 
+Lemma In_cons_inv : forall A (x y : A) l,
+  In x (y :: l) -> (x = y) + In x l.
+Proof.
+intros A x y l e.
+refine (
+match e in In _ l return
+  match l with nil => unit | cons z l => (x = z) + In x l end
+with
+| In_here _ _ => inl eq_refl
+| In_next _ _ _ i => inr i
+end).
+Qed.
+
 Lemma In_map : forall (A B : Type) (f : A -> B) (l : list A) (x : A),
   In x l -> In (f x) (List.map f l).
 Proof.
@@ -93,7 +106,7 @@ Inductive proof (T : Theory) (Σ : nat) (Γ : list (form Σ)) : form Σ -> Type 
 | prf_exs_e :
   forall (A : form (S Σ)) (B : form Σ),
   proof T Σ Γ (Exs A) ->
-  proof T (S Σ) (List.map lift_form Γ) (lift_form B) ->
+  proof T (S Σ) (A :: List.map lift_form Γ) (lift_form B) ->
   proof T Σ Γ B
 .
 
@@ -110,8 +123,10 @@ intros T Σ Γ Δ A Hi H; revert Δ Hi; induction H; intros Δ Hi; try (solve [e
   { intros X HX. apply In_map_rev in HX; destruct HX as [Y [HY ->]].
     apply In_map, Hi, HY. }
 + eapply prf_exs_e; [apply IHproof1, Hi|apply IHproof2].
-  { intros X HX. apply In_map_rev in HX; destruct HX as [Y [HY ->]].
-    apply In_map, Hi, HY. }
+  { intros X HX.
+    apply In_cons_inv in HX; destruct HX as [[]|HX]; [constructor|].
+    apply In_map_rev in HX; destruct HX as [Y [HY ->]].
+    constructor; apply In_map, Hi, HY. }
 Qed.
 
 Lemma prf_subst : forall T Σ Σ' Γ A (ρ : seq (term Σ') Σ),
@@ -156,7 +171,7 @@ intros T Σ Σ' Γ A ρ p; revert Σ' ρ; induction p; intros Σ' ρ; try (solve
     replace Δ with Γ; [replace B with A|]; [assumption| |]
   end.
   - rewrite e; reflexivity.
-  - rewrite !List.map_map; apply List.map_ext; intros ?; apply e.
+  - f_equal; rewrite !List.map_map; apply List.map_ext; intros ?; apply e.
 Qed.
 
 End syntax.

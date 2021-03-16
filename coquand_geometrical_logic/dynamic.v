@@ -819,7 +819,8 @@ intros Σ Γ A Ω ρ π; revert Ω ρ; induction π; intros Ω ρ γ; cbn in *.
   refine (Dyn_map _ IHπ1); intros Ω' α [t p].
   specialize (IHπ2 Ω' (scons t (lift_le ρ α))).
   simple refine (let IHπ2 := IHπ2 _ in _); [|clearbody IHπ2].
-  { apply Forall_map_nat.
+  { constructor; [assumption|].
+    apply Forall_map_nat.
     refine (Forall_map _ _ γ).
     clear. intros X x.
     apply interp_subst; rewrite (@map_init_eta Sig).
