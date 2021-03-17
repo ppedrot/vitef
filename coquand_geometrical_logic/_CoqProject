@@ -3,4 +3,5 @@ seq.v
 syntax.v
 deduction.v
 standard.v
+geometric.v
 dynamic.v
