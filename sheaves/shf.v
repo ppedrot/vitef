@@ -619,6 +619,18 @@ Abort.
 Definition ShQ_η {J A} (x : A) : ShQ J A :=
   quo _ (Build_T _ _ True (ste_top _ I) (fun _ => x)).
 
+(*
+Lemma ShQ_univ {J A B} (hB : isSheaf J B) (f : A -> B) (x : ShQ J A) : B.
+Proof.
+revert x.
+simple refine (quo_rect _ _ _); cbn.
++ intros [P i x].
+  refine (hB.(shf_elt) P i (fun p => f (x p))).
++ intros [P i x] [Q j y] [T [k h z]]; simpl in *.
+  apply hB.(shf_spc); intros q.
+  match goal with [ |- (match ?p with eq_refl => _ end = _) ] => set (e := p); clearbody e end.
+*)
+
 Definition ShQ_bind {J A B} (x : ShQ J A) (f : A -> ShQ J B) : ShQ J B.
 Proof.
 revert x.
