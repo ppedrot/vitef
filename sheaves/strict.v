@@ -126,6 +126,62 @@ Inductive inhabited (A : Type) : SProp := inhabits : A -> inhabited A.
 Definition unique_choice :=
   forall (A : Type) (hA : forall x y : A, x = y), inhabited A -> A.
 
+Definition choice := forall (A : Type), inhabited A -> A.
+
+Section WithChoice.
+
+Variable AC : choice.
+
+Definition sreify {A : Type} (x : ℙ -> A) (xε : Shε x) :
+  inhabited {x₀ : Shf A | eval x₀ = x }.
+Proof.
+induction xε.
++ constructor.
+  exists (ret x); reflexivity.
++ constructor.
+  unshelve eexists.
+  - refine (ask i (fun o => _)).
+    specialize (H o).
+    apply AC in H.
+    destruct H as [x₀ Hx].
+    exact x₀.
+  - simpl.
+    apply sfunext; intros α.
+    match goal with [ |- context [ask i ?k ] ] =>
+      change k with (fun _ : O i => k (α i))
+    end; simpl.
+    rewrite eqn.
+    destruct AC.
+    rewrite e; reflexivity.
+Defined.
+
+Definition reify {A : Type} (x : ℙ -> A) (xε : Shε x) :=
+  proj1_sig (AC _ (@sreify A x xε)).
+
+Lemma eval_reify : forall (A : Type) (x : ℙ -> A) (xε : Shε x),
+  eval (reify x xε) = x.
+Proof.
+intros A x xε.
+unfold reify.
+destruct AC as [y hy]; simpl; assumption.
+Qed.
+
+Lemma reify_eval : forall (A : Type) (x : Shf A),
+  reify (eval x) (evalε _ x) = x.
+Proof.
+intros A x.
+apply uip.
+simple refine (
+Shf_sind A (fun x => seq (reify (eval x) (evalε A x)) x) _ _ x
+); clear x; simpl.
++ intros x.
+  unfold reify.
+  destruct AC as [y hy]; simpl in *.
+  
+Abort.
+
+End WithChoice.
+
 Lemma unique_eval_ret : forall A (p : Shf A) (x : A),
   eval p = (fun _ : ℙ => x) -> p = ret x.
 Proof.
