@@ -1,4 +1,6 @@
 Set Primitive Projections.
+Set Polymorphic Inductive Cumulativity.
+Set Cumulative .
 Set Universe Polymorphism.
 
 Inductive path@{i} {A : Type@{i}} (x : A) : A -> Type@{i} := refl : path x x.
@@ -78,6 +80,12 @@ Proof.
 destruct e.
 reflexivity.
 Defined.
+
+(*
+Definition rew_path_l {A B} (f : forall x : A, B x) {x y : A} (e : path x y)
+  (p : path z (f x)) :
+  path (rew e (fun z => path (f z) (g z)) p) (path_trs _ _).
+*)
 
 Lemma sym_ap : forall {A B} {x y : A} (f : A -> B) (e : path x y),
   path (path_sym (ap f e)) (ap f (path_sym e)).
@@ -322,35 +330,7 @@ assert (e : path φ ζ).
   assert (e : path (g (f (g y))) (g y)).
   { apply (path_sym (κ (g y))). }
   refine (rew e (fun z => path (ψ z) (κ z)) _); clear e.
-  
-
-(*
-  refine (
-    match (ψ (g y)) as e in path _ z return
-      path e (κ z)
-    with
-    | refl => _
-    end
-  ).
-  destruct (ψ (g y)).
-*) admit.
-  
-}
-revert κ η.
-pattern ζ.
-refine (rew e _ _); clear e ζ; intros κ η.
-assert (e : path ψ κ).
-{ admit. }
-destruct e.
-assert (e : path ε η).
-{
-apply funext; intros x.
-apply isContr_K.
-
-revert η.
-refine (rew e _ _); clear e κ.
-
-destruct e.
+Abort.
 
 Monomorphic Universe u.
 
@@ -392,23 +372,21 @@ Import Sh.
 Definition isSheafE@{i} (A : Type@{i}) : Type@{i} :=
   forall (i : I), @isEquiv A (O i -> A) (fun x _ => x).
 
-Definition invSh@{i} {A : Type@{i}} (i : I)
+Definition invSh {A : Type} (i : I)
   (hA : (O i -> A) -> A) (εA : forall x : A, path (hA (fun _ => x)) x)
-  (k : O i -> A) : path@{i} (fun _ => hA k) k.
+  (k : O i -> A) : path (fun _ => hA k) k.
 Proof.
 refine (funext (fun o => _)).
 refine (path_trs _ (εA _)).
-refine (ap@{i i} hA (funext (fun o' => ap k (snd (O i) o' o)))).
+refine (ap hA (funext (fun o' => ap k (snd (O i) o' o)))).
 Defined.
 
 Record isSheaf@{i} (A : Type@{i}) : Type@{i} := {
   shf_fun : forall (i : I) (k : O i -> A), A;
   shf_spc : forall (i : I) (x : A), path (shf_fun i (fun _ => x)) x;
-(*   shf_unq : forall (i : I) (x : A), *)
-(*     path (ap (fun x _ => x) (shf_spc i x)) (invSh i (shf_fun i) (shf_spc i) (fun _ => x)); *)
 }.
 
-Lemma isSheaf_unq : forall A i (hA : (O i -> A) -> A) εA (x : A),
+Lemma isSheaf_unq : forall (A : Type) i (hA : (O i -> A) -> A) εA (x : A),
   path (ap (fun x _ => x) (εA x)) (invSh i hA εA (fun _ => x)).
 Proof.
 intros A i hA εA x.
@@ -428,84 +406,51 @@ destruct (snd (O i)).
 reflexivity.
 Defined.
 
-(*
-Record foo A (i : I) := {
-  g : (O i -> A) -> A;
-  fe : forall (x : A), path x (g (fun _ => x));
-  fg : forall (x : A), path (fe x) _ refl (fe x);
-}.
-*)
-(*
-forall (i : I),
-
-  g : (O i -> A) -> A;
-  ge : forall (k : O i -> A) (o : O i), path (k o) (g k)
-  fe : forall (x : A), path x (g (fun _ => x))
-  fg : forall (x : A), hpath (fe x) refl (ap (ge (fun _ => x)))
-
-*)
+Lemma apf_inv : forall {A : Type} {B : A -> Type} {f g : forall x : A, B x}
+  (p q : path f g), (forall x : A, path (apf p x) (apf q x)) -> path p q.
+Proof.
+intros A B f g p q φ.
+refine (path_trs _ (apf_funext q)).
+refine (path_trs (path_sym (apf_funext p)) _).
+refine (ap _ _).
+refine (funext φ).
+Defined.
 
 Arguments shf_fun {_}.
 Arguments shf_spc {_}.
 
-Lemma isSheaf_isEquiv_ret : forall A (i : I), isSheaf A ->
+Lemma isSheaf_isEquiv_ret : forall (A : Type) (i : I), isSheaf A ->
   @isEquiv A (O i -> A) (fun x _ => x).
 Proof.
 intros A i [f fs] k.
 unshelve econstructor.
 + exists (f i k).
-  apply funext; intros o.
-  eapply path_sym, path_trs; [|apply (fs i _)].
-  apply ap.
-  refine (funext (fun o' => ap _ ((O i).(snd) o' o))).
+  refine (path_sym (invSh _ _ (fun x => fs i x) k)).
 + intros [x e]; simpl.
-  destruct (apf_funext e).
-  revert e; destruct (fs i x); intros e.
-  assert (e' : path k (fun _ => x)).
-  { apply funext; intros o.
-    destruct (path_sym e); apply fs.
-  }
-  destruct e'.
-
-Abort.
+  unshelve refine (sig_path _ _); simpl.
+  - refine (path_trs _ (fs i x)).
+    refine (ap (f i) e).
+  - apply apf_inv; intros o.
+    refine (ap (fun p => apf p o) _).
+    change (fun x => fs i x) with (fs i).
+    rewrite rew_trs, !rew_ap.
+    assert (p : path
+      ((rew e (fun z : O i -> A => path k (fun _ : O i => f i z))
+        (path_sym (invSh i (f i) (fs i) k))))
+      (path_trs e (path_sym (invSh i (f i) (fs i) _)))
+    ).
+    { destruct e; simpl; destruct invSh; reflexivity. }
+    rewrite p; clear p.
+    rewrite <- isSheaf_unq.
+    rewrite (rew_app (fun z p => path_trs e (path_sym (ap (fun (x0 : A) (_ : O i) => x0) p))) (fs i x)).
+    refine (@path_trs _ _ (path_trs e refl) _ _ _); [|destruct e; reflexivity].
+    refine (ap (path_trs e) _).
+    destruct (fs i x); reflexivity.
+Defined.
 
 Definition Sheaf@{i j} : Type@{j} := sig@{j j} Type@{i} isSheaf.
 
-Lemma isProp_isSheaf : forall (A : Type), isProp (isSheaf A).
-Proof.
-intros A [f fs fu] [g gs gu].
-assert (e : path f g).
-{ apply funext; intros i.
-  apply funext; intros k.
-  assert (ef : path k (fun _ => f i k)).
-  { apply funext; intros o.
-    rewrite <- (fs i (k o)).
-    assert (e : path k (fun _ => k o)).
-    { apply funext; intros o'; rewrite ((O i).(snd) o o'); reflexivity. }
-    rewrite e; reflexivity. }
-  rewrite ef, gs, <- ef; reflexivity. }
-destruct e.
-assert (e : path fs gs).
-{
-  apply funext; intros i.
-  apply funext; intros x.
-  apply isContr_K.
-
-  destruct (gs i x).
-  
-
-
-  refine (isContr_K _ _ _ _).
-
-Abort.
-
-Lemma isSheaf_Shf : forall A, isSheaf (Shf A).
-Proof.
-intros A.
-unshelve econstructor.
-+ refine ask.
-+ refine eqn.
-Defined.
+Definition U := Shf Sheaf.
 
 Definition Prod (A : Type) (B : A -> Sheaf) : Sheaf.
 Proof.
@@ -524,33 +469,54 @@ intros A B f.
 refine (Univalence A B f).(fst).(fst).
 Defined.
 
-Definition El : Shf Sheaf -> Sheaf.
+Definition rew_funext {A B f g} e {X} (i : X -> A) (C : forall (x : X), B (i x) -> Type) p :
+  path
+    (rew (@funext A B f g e) (fun h => forall x : X, (C x (h (i x)))) p)
+    (fun x => rew (e (i x)) (C x) (p x)).
 Proof.
-unshelve refine (Shf_rect Sheaf (fun _ => Sheaf) (fun A => A) _ _).
-+ refine (fun i _ r => Prod (O i) r).
+apply funext; intros x.
+unfold funext.
+destruct Funext as [[q hq] φ]; simpl.
+destruct q; simpl in *.
+clear φ.
+destruct (path_sym hq); simpl.
+reflexivity.
+Defined.
+
+Lemma isProp_isSheaf : forall (A : Type), isProp (isSheaf A).
+Proof.
+intros A [f fs] [g gs].
+cut (sig (path f g) (fun e => path (rew e (fun h => forall (i : I) (x : A), path (h i (fun _ : O i => x)) x) fs) gs)). 
+{ intros [p q]; destruct p, q; reflexivity. }
+unshelve econstructor.
++ apply funext; intros i.
+  apply funext; intros k.
+  pose (p := invSh i (f i) (fs i) k).
+  refine (path_trs _ (ap (g i) p)).
+  refine ((path_sym (gs i _))).
++ simpl.
+  apply funext; intros i.
+  apply funext; intros x.
+  match goal with [ |- path (rew (funext ?e) _ _ _ _) _ ] =>
+    rewrite (rew_funext e (fun x => x) (fun i h => forall (x : A), path (h _) x))
+  end.
+  match goal with [ |- path (rew (funext ?e) _ _ _) _ ] =>
+    rewrite (rew_funext e (fun x => fun _ => x) (fun x h => path h x))
+  end.
+  rewrite <- isSheaf_unq; simpl.
+  destruct (fs i x); simpl.
+  destruct gs; reflexivity.
+Defined.
+
+Definition El : U -> Sheaf.
+Proof.
+simple refine (Shf_rect Sheaf _ (fun A => A) (fun i k A => Prod (O i) A) _); simpl.
 + intros A₀ [A hA] i; simpl.
-  destruct eqn; unfold hpath; simpl; clear A₀.
-  unshelve refine (sig_path _ _ _ _ _ _); simpl.
-  - apply WUniv.
-    exists (hA.(shf_fun) i).
-    unshelve econstructor.
-    * exists (fun _ => y).
-      apply path_sym, shf_spc.
-    * intros [k e].
-      unshelve refine (sig_path _ _ _ _ _ _); simpl.
-      { apply funext; intros o.
-        destruct (path_sym e).
-        admit. }
-      destruct (path_sym e).
-      simpl.
-Abort.
-
-
-
-
-  
-  
-
-
-
-
+  simple refine (sig_path _ _); simpl.
+  - apply path_sym. apply WUniv.
+    destruct (eqn i A₀); simpl.
+    exists (fun x _ => x).
+    apply isSheaf_isEquiv_ret, hA.
+  - destruct (eqn i A₀); simpl.
+    refine (isProp_isSheaf _ _ _).
+Defined.
