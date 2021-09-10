@@ -520,3 +520,30 @@ simple refine (Shf_rect Sheaf _ (fun A => A) (fun i k A => Prod (O i) A) _); sim
   - destruct (eqn i A₀); simpl.
     refine (isProp_isSheaf _ _ _).
 Defined.
+
+Definition eqSh_rect
+  (A : Sheaf) (x : A.(fst)) (P : forall y : A.(fst), Shf (path x y) -> Sheaf)
+  (pr : (P x (ret refl)).(fst)) (y : A.(fst)) (e : Shf (path x y)) : (P y e).(fst).
+Proof.
+revert e.
+simple refine (Shf_rect _ (fun e => (P y e).(fst)) _ _ _); simpl in *.
++ revert y; refine (path_rect _ _ _ _).
+  exact pr.
++ intros i k r.
+  simple refine (shf_fun (_.(snd)) i (fun o => _)).
+  refine (rew (path_sym (apf (invSh i (ask i) (eqn i) k) o)) (fun w => fst (P y w)) (r o)).
++ intros s ps i; simpl.
+  rewrite <- isSheaf_unq; simpl.
+  assert (e : path (apf
+                 (ap (fun (x : Shf (path x y)) (_ : O i) => x)
+                    (eqn i s))) (fun _ => eqn i s)).
+  { destruct (eqn i s); reflexivity. }
+  rewrite e; clear e.
+  rewrite <- (rew_app (fun w (r : fst (P y w)) => shf_fun (_.(snd)) i (fun _ => r)) (path_sym (eqn i s))).
+  rewrite <- rew_trs.
+  rewrite shf_spc.
+  rewrite <-(sym_sym (eqn i s)).
+  rewrite <- sym_trs.
+  rewrite path_inv.
+  reflexivity.
+Defined.
