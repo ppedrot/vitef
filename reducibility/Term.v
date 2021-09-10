@@ -1,4 +1,4 @@
-Require Import Omega.
+Require Import Lia.
 
 Inductive term :=
 | var : nat -> term

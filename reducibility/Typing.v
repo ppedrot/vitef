@@ -1,4 +1,4 @@
-Require Import Omega Term Convertibility.
+Require Import Lia Term Convertibility.
 
 Inductive type :=
 | atm : nat -> type

@@ -1,5 +1,5 @@
 Require List.
-Require Import CMorphisms PeanoNat Omega.
+Require Import CMorphisms PeanoNat Lia.
 
 Require Import Term Convertibility Typing.
 
