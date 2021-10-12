@@ -192,6 +192,29 @@ unshelve econstructor; simpl.
   refine ((γ p !).(ext_typ_rel)).
 Defined.
 
+Definition Lft {Γ Δ : Ctx} (σ : Sub Γ Δ) (A : Typ Δ) :
+  Sub (Ext Γ (Typ_subs σ A)) (Ext Δ A).
+Proof.
+unshelve econstructor.
++ unshelve refine (fun p γ γε => Build_Ext_typ _ _ _ _ _ _); simpl in *.
+  - unshelve refine (fun q α => σ q (fun r (β : r ≤ q) => (γ r (β ∘ α)).(ext_typ_ctx) r !) _).
+    refine (rew (ctx_rel Γ) (γε.(ext_rel_ctx) q α) _).
+    refine ((γ q α).(ext_typ_rel)).
+  - refine (σ.(sub_rel) p
+      (fun q (α : q ≤ p) => (γ q α).(ext_typ_ctx) q !)
+      (rew (ctx_rel Γ) (γε.(ext_rel_ctx) p !) (γ p !).(ext_typ_rel))
+    ).
+  - refine (eqn_rect (fun c e₀ => A p
+      (fun (q : ℙ) (α : q ≤ p) =>
+       σ q (α · c) ((Θ Γ α (rew (ctx_rel Γ) e₀ (ext_typ_rel (γ p !))))))
+      (sub_rel σ p c (rew (ctx_rel Γ) e₀ (ext_typ_rel (γ p !))))) ((γ p !).(ext_typ_ext)) (ext_rel_ctx γε p !)).
++ simpl.
+  refine (fun p γ γε => _).
+  unshelve econstructor.
+  - reflexivity.
+  - refine γε.(ext_rel_ext).
+Defined.
+
 Definition Var {Γ : Ctx} {A : Typ Γ} : Trm (Ext Γ A) (Typ_subs (Wkn Γ A) A).
 Proof.
 unshelve econstructor; simpl.
@@ -244,7 +267,7 @@ unshelve econstructor.
   unshelve refine (t.(trm_rel) _ _ _).
 Defined.
 
-Definition App {Γ : Ctx} (A : Typ Γ) {B : Typ (Ext Γ A)}
+Definition App {Γ : Ctx} {A : Typ Γ} {B : Typ (Ext Γ A)}
   (t : Trm Γ (Prd A B)) (u : Trm Γ A) : Trm Γ (Typ_subs (Cns _ _ u) B).
 Proof.
 unshelve econstructor.
@@ -253,3 +276,18 @@ unshelve econstructor.
 + simpl. refine (fun p γ γε => _).
   unshelve refine (t.(trm_rel) p _ _ _ _ _ _).
 Defined.
+
+Lemma Lam_App_eqn :
+  forall (Γ : Ctx) (A : Typ Γ) (B : Typ (Ext Γ A)) (t : Trm (Ext Γ A) B) (u : Trm Γ A),
+  App (Lam A t) u = Trm_subs (Cns _ _ u) t.
+Proof.
+reflexivity.
+Qed.
+
+Lemma App_Lam_eqn :
+  forall (Γ : Ctx) (A : Typ Γ) (B : Typ (Ext Γ A))
+  (t : Trm Γ (Prd A B)),
+  Lam A (@App (Ext Γ A) (Typ_subs (Wkn Γ A) A) (Typ_subs (Lft (Wkn Γ A) A) B) (Trm_subs (Wkn Γ A) t) Var) = t.
+Proof.
+reflexivity.
+Qed.
