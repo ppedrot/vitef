@@ -70,12 +70,41 @@ Coercion sub_fun : Sub >-> Funclass.
 Arguments sub_fun {_ _}.
 Arguments sub_rel {_ _}.
 
-(*
+Definition Idn {Γ : Ctx} : Sub Γ Γ.
+Proof.
+unshelve econstructor.
++ unshelve refine (fun p γ γε => γ p !).
++ unshelve refine (fun p γ γε => γε p !).
+Defined.
+
 Definition Cmp {Γ Δ Ξ : Ctx} (σ : Sub Γ Δ) (ρ : Sub Δ Ξ) : Sub Γ Ξ.
 Proof.
 unshelve econstructor.
-+ refine (fun p γ γε => ρ _ _ (fun q α => σ.(sub_rel) _ (α · γ) (α · γε))).
-*)
++ unshelve refine (fun p γ γε => ρ _ _ _).
+  unshelve refine (fun q α => σ _ (α · γ) (fun r β => γε _ (β ∘ α))).
+  unshelve refine (fun q α => σ.(sub_rel) _ (α · γ) (α · γε)).
++ unshelve refine (fun p γ γε =>
+  ρ.(sub_rel) _
+    (fun q α => σ _ (α · γ) (fun r β => γε _ (β ∘ α)))
+    (fun q α => σ.(sub_rel) _ (α · γ) (α · γε))
+).
+Defined.
+
+Lemma Idn_Cmp : forall {Γ Δ} (σ : Sub Γ Δ), Cmp Idn σ = σ.
+Proof.
+reflexivity.
+Qed.
+
+Lemma Cmp_Idn : forall {Γ Δ} (σ : Sub Γ Δ), Cmp σ Idn = σ.
+Proof.
+reflexivity.
+Qed.
+
+Lemma Cmp_Cmp : forall {Γ Δ Ξ Ω} (σ : Sub Γ Δ) (ρ : Sub Δ Ξ) (θ : Sub Ξ Ω),
+  Cmp (Cmp σ ρ) θ = Cmp σ (Cmp ρ θ).
+Proof.
+reflexivity.
+Qed.
 
 Record Typ (Γ : Ctx) := {
   typ_typ : forall p
@@ -143,20 +172,85 @@ Arguments ext_typ_ctx {_ _ _}.
 Arguments ext_typ_rel {_ _ _}.
 Arguments ext_typ_ext {_ _ _}.
 
+Definition run {A : ℙ -> Type} {p : ℙ}
+  (x : forall (q : ℙ) (α : q ≤ p) r (β : r ≤ q), A r) :
+  forall (q : ℙ) (α : q ≤ p), A q := fun q (α : q ≤ p) => x q α q !.
+
+Definition ret {A : ℙ -> Type} {p : ℙ}
+  (x : forall (q : ℙ) (α : q ≤ p), A q) :
+  forall (q : ℙ) (α : q ≤ p) r (β : r ≤ q), A r :=
+    fun q (α : q ≤ p) r (β : r ≤ q) => x r (β ∘ α).
+
+Definition evl {A} {p} x := @ret A p (@run A p x).
+
+Definition Fε {A : ℙ -> Type} {p : ℙ}
+  (x : forall (q : ℙ) (α : q ≤ p) r (β : r ≤ q), A r) :=
+  eqn x (evl x).
+
+Definition ΘF {A} {p : ℙ}
+  (x : forall (q : ℙ) (α : q ≤ p) r (β : r ≤ q), A r)
+  (xε : @Fε A p x) {q} (α : q ≤ p) : @Fε A q (α · x).
+Proof.
+refine (match xε in eqn _ z return Fε (α · z) -> Fε (α · x) with refl _ _ => fun e => e end _).
+reflexivity.
+Defined.
+
+Notation "α • xε" := (ΘF _ xε α)  (at level 50).
+
 Definition Θ {Γ : Ctx} {p : ℙ}
   (γ : forall (q : ℙ) (α : q ≤ p) r (β : r ≤ q), Γ r)
   (γε : forall (q : ℙ) (α : q ≤ p) r (β : r ≤ q), ctx_rel Γ (β · (γ q α)))
-  (γe : forall q (α : q ≤ p), eqn (γ q α) (fun r (β : r ≤ q) => (γ r (β ∘ α)) r !)) :
+  (γe : Fε γ) :
   forall (q : ℙ) (α : q ≤ p),
     ctx_rel Γ (fun  (r : ℙ) (β : r ≤ q) => γ r (β ∘ α) r !) :=
-  rew (fun γ₀ => forall q (α : q ≤ p), ctx_rel Γ (α · γ₀)) (γe p !) (γε p !).
+  rew (fun γ₀ => forall q (α : q ≤ p), ctx_rel Γ (α · (γ₀ p !))) γe (γε p !).
+
+Definition F_rect {A : ℙ -> Type} {p : ℙ}
+  (P : forall
+    (x : forall (q : ℙ) (α : q ≤ p) r (β : r ≤ q), A r)
+    (xε : Fε x),
+    Type
+  )
+  (u : forall
+    (x : forall (q : ℙ) (α : q ≤ p), A q),
+    P (ret x) (refl _ _)
+  )
+  (x : forall (q : ℙ) (α : q ≤ p) r (β : r ≤ q), A r)
+  (xε : Fε x) :
+  P x xε.
+Proof.
+unshelve refine (
+  eqn_rect (fun x₀ (e₀ : eqn (evl x) x₀) => P x₀ (rew Fε e₀ (refl _ _))) (u (run x))
+  (rew (fun z => eqn z _) xε (refl _ _))
+).
+Defined.
+
+Definition F_sind {A : ℙ -> Type} {p : ℙ}
+  (P : forall
+    (x : forall (q : ℙ) (α : q ≤ p) r (β : r ≤ q), A r)
+    (xε : Fε x),
+    SProp
+  )
+  (u : forall
+    (x : forall (q : ℙ) (α : q ≤ p), A q),
+    P (ret x) (refl _ _)
+  )
+  (x : forall (q : ℙ) (α : q ≤ p) r (β : r ≤ q), A r)
+  (xε : Fε x) :
+  P x xε.
+Proof.
+unshelve refine (
+  eqn_sind _ _ (fun x₀ (e₀ : eqn (evl x) x₀) => P x₀ (rew Fε e₀ (refl _ _))) (u (run x))
+  _ (rew (fun z => eqn z _) xε (refl _ _))
+).
+Defined.
 
 Definition letΘ {Γ : Ctx} {A : Typ Γ} {p : ℙ}
   (γ : forall (q : ℙ) (α : q ≤ p) r (β : r ≤ q), Γ r)
   (γε : forall (q : ℙ) (α : q ≤ p) r (β : r ≤ q), ctx_rel Γ (β · (γ q α)))
-  (γe : forall q (α : q ≤ p), eqn (γ q α) (fun r (β : r ≤ q) => (γ r (β ∘ α)) r !))
+  (γe : Fε γ)
   (x : forall q (α : q ≤ p), A q (γ q α) (γε q α)) :
-  (forall (q : ℙ) (α : q ≤ p), A q (fun r β => γ r (β ∘ α) r !) (α · Θ _ γε γe)).
+  (forall (q : ℙ) (α : q ≤ p), A q (evl γ q α) (α · Θ _ γε γe)).
 Proof.
 refine (fun q (α : q ≤ p) =>
   eqn_rect
@@ -166,83 +260,49 @@ refine (fun q (α : q ≤ p) =>
         A q γ₀ (rew (fun γ₀ => forall (r : ℙ) (β : r ≤ q), ctx_rel Γ (β · γ₀)) e₀ (γε q α))
   )
   (x q α)
-  (γe q α)
+  (rew (fun γ₀ => eqn _ (γ₀ q α)) γe (refl _ _))
 ).
+(*
+refine (fun q (α : q ≤ p) =>
+  F_rect (fun γ₀ e₀ => forall γε, A q (γ₀ q α) (γε q α) -> A q (evl γ₀ q α) (α · Θ γ₀ γε e₀)) (fun γ γε x => x) γ γe γε (x q α)
+).
+*)
 Defined.
+
+Lemma letΘ_mono : forall Γ A p γ γε γe x q (α : q ≤ p),
+  α · (@letΘ Γ A p γ γε γe x) = @letΘ Γ A q (α · γ) (α · γε) (α • γe) (α · x).
+Proof.
+reflexivity.
+Qed.
 
 Definition eqn_sym {A} {x y : A} (e : eqn x y) : eqn y x.
 Proof.
 destruct e; reflexivity.
 Qed.
 
-(*
-Lemma letΘ_rect {Γ : Ctx} {A : Typ Γ} {p : ℙ}
-  (P :
-    forall
-      (γ : forall (q : ℙ) (α : q ≤ p), Γ q)
-      (γε : forall (q : ℙ) (α : q ≤ p), ctx_rel Γ (α · γ))
-      (x : forall (q : ℙ) (α : q ≤ p), A q (α · γ) (α · γε)),
-      Type
-  )
-  (γ : forall (q : ℙ) (α : q ≤ p) r (β : r ≤ q), Γ r)
-  (γε : forall (q : ℙ) (α : q ≤ p) r (β : r ≤ q), ctx_rel Γ (β · (γ q α)))
-  (γe : forall q (α : q ≤ p), eqn (γ q α) (fun r (β : r ≤ q) => (γ r (β ∘ α)) r !))
-  (x : forall q (α : q ≤ p), A q (γ q α) (γε q α))
-(*   (u : P γ γε x) *)
-  :
-  P (fun q (α : q ≤ p) => γ q α q !) (Θ γ γε γe) (@letΘ Γ A p γ γε γe x).
+Definition eqn_trs {A} {x y z : A} (p : eqn x y) (q : eqn y z) : eqn x z.
 Proof.
+destruct p, q; reflexivity.
+Qed.
 
-unshelve refine (let F :=
-
-  (fun
-    (γ₀ : forall q (α : q ≤ p), Γ q)
-    (e₀ : eqn (γ p !) γ₀) =>
-    P γ₀
-      (rew (fun γ₀ => forall q (α : q ≤ p), ctx_rel Γ (α · γ₀)) e₀ (γε p !))
-      (fun q α => eqn_rect
-        (fun γ₁ e₁ => A q (α · γ₁) (α · (rew (fun γ₂ => forall r β, ctx_rel Γ (β · γ₂)) e₁ (γε p !))))
-        _
-        e₀)
-  )
-
-in _
-
-
-).
-
-simpl.
-
-unshelve refine (
-
-eqn_rect (fun γ₁ (e₁ : eqn (fun q (α : q ≤ p) => γ q α q !) γ₁) =>
-  forall e,
-  A q (α · γ₁)
-    (e : forall (r : ℙ) (β : r ≤ q), ctx_rel Γ ((β ∘ α) · γ₁))
-) _ (eqn_sym (γe p !)) _
-
-).
-
-simpl.
-Admitted.
-*)
-
+Definition eqn_app {A B} (f : A -> B) {x y : A} (e : eqn x y) : eqn (f x) (f y).
+Proof.
+destruct e; reflexivity.
+Qed.
 
 Record Ext_rel (Γ : Ctx) (A : Typ Γ) (p : ℙ)
   (γ : forall q (β : q ≤ p) r (β : r ≤ q), Γ r)
   (γε : forall q (α : q ≤ p) r (β : r ≤ q), ctx_rel Γ (β · (γ q α)))
   (x : forall q (α : q ≤ p), A q (γ q α) (γε q α)) : SProp := {
 
-  ext_rel_ctx :
-    forall q (α : q ≤ p),
-      eqn (γ q α) (fun r (β : r ≤ q) => (γ r (β ∘ α)) r !);
+  ext_rel_ctx : Fε γ;
 
   ext_rel_ext :
     forall q (α : q ≤ p),
     @typ_rel _ A q
       (fun r (β : r ≤ q) => (γ r (β ∘ α)) r !)
-      (Θ _ (fun r β => (γε r (β ∘ α))) (α · ext_rel_ctx))
-      (letΘ _ _ (α · ext_rel_ctx) (fun r β => (x r (β ∘ α))))
+      (Θ _ (fun r β => (γε r (β ∘ α))) (α • ext_rel_ctx))
+      (letΘ _ _ (α • ext_rel_ctx) (α · x))
 }.
 
 Arguments ext_rel_ctx {_ _ _ _ _ _}.
@@ -289,11 +349,11 @@ Proof.
 unshelve econstructor.
 + unshelve refine (fun p γ γε => Build_Ext_typ _ _ _ _ _ _); simpl in *.
   - unshelve refine (fun q α => σ q (fun r (β : r ≤ q) => (γ r (β ∘ α)).(ext_typ_ctx) r !) _).
-    refine (Θ _ (fun r β => (γ r (β ∘ α)).(ext_typ_rel)) (fun r β => (γε r (β ∘ α)).(ext_rel_ctx) r !)).
+    refine (Θ _ (fun r β => (γ r (β ∘ α)).(ext_typ_rel)) ((γε q α).(ext_rel_ctx))).
 
   - refine (fun q α => σ.(sub_rel) q
       (fun r (β : r ≤ q) => (γ r (β ∘ α)).(ext_typ_ctx) r !)
-      (rew (fun γ₀ => forall r (β : r ≤ q), ctx_rel Γ (β · γ₀)) ((γε q α).(ext_rel_ctx) q !) (γ q α).(ext_typ_rel))
+      (rew (fun γ₀ => forall r (β : r ≤ q), ctx_rel Γ (β · (γ₀ q α))) ((γε p !).(ext_rel_ctx)) (γ q α).(ext_typ_rel))
     ).
   - refine (
 
@@ -306,7 +366,7 @@ unshelve econstructor.
         (fun (q : ℙ) (α : q ≤ p) =>
          sub_rel σ q (α · γ₀)
            (α · e₁))
-      ) ((γ p !).(ext_typ_ext)) (ext_rel_ctx (γε p !) p !)
+      ) ((γ p !).(ext_typ_ext)) (rew (fun γ₀ => eqn _ (γ₀ p !)) (ext_rel_ctx (γε p !)) (refl _ _))
     ).
 + simpl.
   refine (fun p γ γε => _).
@@ -320,7 +380,7 @@ Definition Var {Γ : Ctx} {A : Typ Γ} : Trm (Ext Γ A) (Typ_subs (Wkn Γ A) A).
 Proof.
 unshelve econstructor; simpl.
 + refine (fun p γ γε => _).
-  refine (letΘ _ (fun q α => (γ q α).(ext_typ_rel)) (fun q α => (γε q α).(ext_rel_ctx) q !) _ p !).
+  refine (letΘ _ (fun q α => (γ q α).(ext_typ_rel)) ((γε p !).(ext_rel_ctx)) _ p !).
   refine (fun q α => (γ q α).(ext_typ_ext)).
 + simpl.
   refine (fun p γ γε => _).
@@ -349,9 +409,9 @@ unshelve econstructor; simpl.
       @typ_rel _ B q _ _ _
   ).
   - refine (fun r (β : r ≤ q) => Build_Ext_typ _ _ _ (fun s ζ => γ s (ζ ∘ β ∘ α)) ((β ∘ α) · γε) (x r β)).
-  - simpl; unshelve econstructor; simpl.
-    { intros r β; reflexivity. }
-    { refine (_ · xε). }
+  - simpl; intros r β; unshelve econstructor; simpl.
+    { reflexivity. }
+    { refine (β · xε). }
   - simpl.
     refine (fun r β => f r (β ∘ α) (β · x) (β · xε)).
 Defined.
@@ -508,6 +568,25 @@ destruct nε.
   ).
 Qed.
 
+Definition Natε_S_inv (p : ℙ)
+  (n : forall q : ℙ, q ≤ p -> Nat₀ q)
+  (nε : forall (q : ℙ) (α : q ≤ p), Natε (fun r β => S₀ r ((β ∘ α) · n))) :
+  forall q (α : q ≤ p), Natε (α · n).
+Proof.
+specialize (nε p !).
+refine (
+match nε in Natε n₀ return
+  match n₀ p ! return SProp with
+  | O₀ _ => True
+  | S₀ _ m₀ => forall q α, Natε (α · m₀)
+  end
+with
+| Oε => I
+| Sε _ mε => mε
+end
+).
+Defined.
+
 Definition Build_trm_aux {Γ : Ctx} (A : Typ Γ)
   (x : forall (p : ℙ)
     (γ : forall q (α : q ≤ p), Γ q)
@@ -529,60 +608,6 @@ unshelve econstructor.
   refine ((x p γ γε).(spc)).
 Defined.
 
-(*
-Definition foo
-
-{Γ : Ctx} (A : Typ Γ) (B : Typ (Ext Γ A)) p
-
-    (γ : forall q (α : q ≤ p), Γ q)
-    (γε : forall q (α : q ≤ p), (ctx_rel Γ) (α · γ))
-    (x : forall q (α : q ≤ p), A q (α · γ) (α · γε))
-    (xε : forall q (α : q ≤ p), @typ_rel _ A _ (α · γ) (α · γε) (α · x)) :
-    Type
-.
-unshelve refine (
-
-    exist
-    (forall q (α : q ≤ p), B q
-      (fun r β => Build_Ext_typ Γ A r
-        ((β ∘ α) · γ) ((β ∘ α) · γε) (x r (β ∘ α)))
-      (fun r β => Build_Ext_rel Γ A r _ _ _ _ _))
-    (fun x => (* @typ_rel _ B _ _ _ _ *) _)
-
-).
-
-simpl.
-intros; reflexivity.
-simpl.
-Show Proof.
-
-
-Definition Build_lam_aux {Γ : Ctx} (A : Typ Γ) (B : Typ (Ext Γ A))
-  (f : forall (p : ℙ)
-    (γ : forall q (α : q ≤ p), Γ q)
-    (γε : forall q (α : q ≤ p), (ctx_rel Γ) (α · γ))
-    (x : forall q (α : q ≤ p), A q (α · γ) (α · γε))
-    (xε : forall q (α : q ≤ p), @typ_rel _ A _ (α · γ) (α · γε) (α · x)),
-    exist
-    (forall q (α : q ≤ p), A q (α · γ) (α · γε))
-    (fun x => @typ_rel _ A p γ γε x))
-(*
-  (xε : forall p
-    (γ : forall q (α : q ≤ p), Γ q)
-    (γε : forall q (α : q ≤ p), (ctx_rel Γ) (α · γ)),
-    eqn ((x p γ γε).(val)) (fun q (α : q ≤ p) => (x q (α · γ) (α · γε)).(val) q !)) :
-*)
-  :
-  Trm (Ext Γ A) B.
-Proof.
-unshelve econstructor.
-+ intros p γ γε.
-  refine ((x p γ γε).(val) p !).
-+ simpl; intros p γ γε.
-  refine (rew (fun x₀ => typ_rel A x₀) (xε p γ γε) _).
-  refine ((x p γ γε).(spc)).
-Defined.
-*)
 
 Definition Ext_elim₀  {Γ : Ctx} (A : Typ Γ) (p : ℙ)
   (P : forall
@@ -592,11 +617,10 @@ Definition Ext_elim₀  {Γ : Ctx} (A : Typ Γ) (p : ℙ)
     (γ : forall q (α : q ≤ p) r (β : r ≤ q), Γ r)
     (γε : forall q (α : q ≤ p) r (β : r ≤ q), ctx_rel Γ (β · (γ q α)))
     (x : forall q (α : q ≤ p), A q (γ q α) (γε q α))
-    (γe : forall q (α : q ≤ p),
-                 eqn (γ q α) (fun (r : ℙ) (β : r ≤ q) => γ r (β ∘ α) r !))
-    (xε : forall q (α : q ≤ p), @typ_rel Γ A q (fun (r : ℙ) (β : r ≤ q) => γ r (β ∘ α) r !) (α · Θ γ γε γe) (letΘ (α · γ) (α · γε) (α · γe) (α · x))),
+    (γe : Fε γ)
+    (xε : forall q (α : q ≤ p), @typ_rel Γ A q (evl (α · γ) q !) (α · Θ γ γε γe) (letΘ (α · γ) (α · γε) (α • γe) (α · x))),
     P (fun q α => Build_Ext_typ Γ A q (γ q α) (γε q α) (x q α))
-    (fun q α => Build_Ext_rel Γ A q (α · γ) (α · γε) (α · x) (α · γe) (α · xε))
+    (fun q α => Build_Ext_rel Γ A q (α · γ) (α · γε) (α · x) (α • γe) (α · xε))
 
   )
   (γ : forall q (α : q ≤ p), Ext Γ A q)
@@ -607,7 +631,7 @@ refine (u
   (fun q α r β => (γ q α).(ext_typ_ctx) r β)
   (fun q α r β => (γ q α).(ext_typ_rel) r β)
   (fun q α => (γ q α).(ext_typ_ext))
-  (fun q α => (γε q α).(ext_rel_ctx) q !)
+  ((γε p !).(ext_rel_ctx))
   (fun q α => (γε q α).(ext_rel_ext) q !)
 ).
 Defined.
@@ -630,76 +654,66 @@ unshelve refine (Build_trm_aux _ (fun p => _) _).
   generalize (refl _ (n p !)).
   generalize (n p !) at 1 as n₀.
   induction n₀ as [|p n₀ IHn₀]; intros e₀.
-  - simpl; unshelve econstructor.
-    refine (fun q α => _).
-    change (
-      elt
-        (trm_elt P q (fun (q0 : ℙ) (α0 : q0 ≤ q) => γ q0 (α0 ∘ α) q0 !)
-           (Θ (α · γ) (α · γε) (α · γe))
-           (@letΘ Γ Nat _ (α · γ) (α · γε) (α · γe) (α · n)) (α · nε)) q !
-    ).
-    assert (nε' : Na
+  - simpl. unshelve econstructor.
 
-pose (Nat_O_inv _ (@letΘ Γ Nat _ γ γε γe n) nε).
-
-(letΘ _
-       _
-       _
-       (fun r β => (γ r β).(ext_typ_ext)))
-
-) (fun r β => (γε r β).(ext_rel_ext) r !) e₀).
-pose (u := pO.(trm_elt) q (fun r β => ext_typ_ctx (γ r (β ∘ α)) r !)).
-simpl in u.
-
-
-    { refine (fun q α => _).
-
-(*       pose (e₁ := (γε p !).(ext_rel_ctx) p !). *)
-
-      refine (
-
-        eqn_rect (fun (γ₀ : forall q (α : q ≤ p), Γ q)
-              (e₀ : eqn (ext_typ_ctx (γ p !)) γ₀) =>
-        let e₁ := rew (fun γ₁ => forall (r : ℙ) (β : r ≤ q), ctx_rel Γ (β · (α · γ₁))) e₀ (α · (γ p !).(ext_typ_rel)) in
+    * refine (fun q α => _).
+      change (
         elt
-          (trm_elt P q (α · γ₀) e₁ 
-             (fun (r : ℙ) (β : r ≤ q) =>
-              eqn_rect
-                (fun (γ₀ : forall s : ℙ, s ≤ r -> Γ s)
-                     (_ : eqn (ext_typ_ctx (γ r (β ∘ α))) γ₀) => 
-                 Nat₀ r)
-                (ext_typ_ext (γ r (β ∘ α)))
-                (ext_rel_ctx (γε r (β ∘ α)) r !)
-              )
-             (fun (r : ℙ) (β : r ≤ q) => ext_rel_ext (γε r (β ∘ α)) r !)) q
-          !
-
-        ) _ (ext_rel_ctx (γε p !) p !)
+          (trm_elt P q (evl γ q α)
+             (α · (Θ γ γε γe))
+             (α · (@letΘ Γ Nat _ γ γε γe n)) (α · nε)) q !
       ).
-    simpl.
-    pose (pO.(trm_elt) q (α · ext_typ_ctx (γ p !)) (α · ext_typ_rel (γ p !))).
-simpl in t.
-    refine 
+      change (forall q (α : q ≤ p), Natε (α · (@letΘ _ Nat _ γ γε γe n))) in nε.
 
-  - simpl.
-  fix F 1; intros n₀ e₀.
-  unshelve econstructor.
-  - refine (fun q α => _); simpl.
+      revert γ γe γε nε; refine (F_rect _ _); simpl; intros γ γε nε.
+
+      pose (e₁ := Nat_O_inv _ n nε e₀).
+
+      destruct e₁.
+
+      refine (pO.(trm_elt) q (α · γ) (γε q α)).
+
+    * revert γ γe γε nε.
+      refine (F_sind _ _); simpl; intros γ γε nε. 
+      pose (e₁ := Nat_O_inv _ n nε e₀).
+      destruct e₁; simpl.
+      refine (pO.(trm_rel) _ _ _).
+
+  - simpl. unshelve econstructor.
+
+    * refine (fun q α => _).
     
-    refine (
-      match n₀ return eqn n₀ (ext_typ_ext (γ p !)) -> _
-      with
-      | O₀ _ => fun e => _
-      | S₀ _ n => fun e => _
-      end e₀
-    ).
-    * induction ((Nat_O_inv _ _ nε e)).
-      refine (pO.(trm_elt) _ _ _).
-    * induction (Nat_S_inv _ _ nε _ e).
-      unshelve refine (pS.(trm_elt) q (α · γ) (α · γε) n _ _ _).
-      
-2:{ simpl.
-  refine (fun q α => F
-    apply 
+      revert γ γe γε nε; refine (F_rect _ _); simpl; intros γ γε nε.
 
-refine (eqn_rect (fun n₀ => _) (Nat_O_inv _ _ _ e) _).
+      pose (e₁ := Nat_S_inv _ n nε n₀ e₀).
+
+      destruct e₁.
+
+      unshelve refine (pS.(trm_elt) q (α · γ) (γε q α) (α · n₀) (Natε_S_inv _ (α · n₀) (α · nε)) _ _).
+
+      { unshelve refine (α · (IHn₀ p ! (ret γ) γε _ (refl _ _) (Natε_S_inv _ n₀ nε) (refl _ _)).(val)). }
+
+(* (*       { unshelve refine (fun r β => (IHn₀ r (β ∘ α) (ret (α · γ)) (α · γε) _ (refl _ _) (Natε_S_inv _ (α · n₀) (α · nε)) (refl _ _)).(spc)). } *) *)
+      { elim F. }
+
+      
+
+    * elim F.
+
++ elim F.
+
+Defined.
+
+Lemma Nat_rect_O : forall
+  (Γ : Ctx)
+  (P : Trm Γ (Prd Nat Unv))
+  (pO : Trm Γ (Elt (App P O)))
+  (pS : Trm Γ
+    (Prd Nat
+    (Prd (Elt (@App _ Nat Unv (Trm_subs (Wkn _ _) P) (@Var _ Nat)))
+      (Elt (@App _ Nat Unv ((Trm_subs (Wkn (Ext Γ Nat) _)
+      (Trm_subs (Wkn Γ Nat) P))) (App S (Trm_subs (Wkn (Ext Γ Nat) _) Var))))))),
+  (App (Nat_rect P pO pS) O) = pO.
+Proof.
+reflexivity.
+Qed.
