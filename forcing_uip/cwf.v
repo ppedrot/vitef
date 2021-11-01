@@ -875,6 +875,8 @@ destruct nε.
   destruct e; constructor.
 Qed.
 
+Set Printing Relevance.
+
 Definition Nat_S_inv (p : ℙ)
     (n : forall q : ℙ, q ≤ p -> Nat₀ q)
     (nε : forall (q : ℙ) (α : q ≤ p), Natε (α · n))
@@ -897,7 +899,7 @@ destruct nε.
       end
     with refl _ _ => refl _ _ end
   ).
-Qed.
+Defined.
 
 Definition Natε_S_inv (p : ℙ)
   (n : forall q : ℙ, q ≤ p -> Nat₀ q)
@@ -929,11 +931,15 @@ Definition Nat_rect {Γ : Ctx}
   :
   Trm Γ (Prd Nat (Elt ((@App _ Nat Unv (Trm_subs (Wkn _ _) P)) (@Var _ Nat)))).
 Proof.
-unshelve refine (Build_lam_aux _ _ _ _); simpl in *.
+unshelve refine (Build_lam_aux _ _ _ _).
 + intros p γ γε n nε. simpl in n, nε.
+(*   unfold letΘ in *; simpl in *. *)
   generalize (refl _ (n p !)).
   generalize (n p !) at 1 as n₀.
-  induction n₀ as [|p n₀ IHn₀]; intros e₀.
+  intros n₀; revert n₀ n nε.
+  fix F 1; intros n₀.
+  destruct n₀ as [|n₀]; intros n nε e₀.
+(*   induction n₀ as [|p n₀ IHn₀]; intros e₀. *)
   - simpl. unshelve econstructor.
 
     * refine (fun q α => _).
@@ -951,84 +957,23 @@ unshelve refine (Build_lam_aux _ _ _ _); simpl in *.
   - unshelve econstructor.
 
     * refine (fun q α => _).
+
       pose (e₁ := Nat_S_inv _ n nε n₀ e₀).
-      destruct e₁.
+      induction e₁.
       unshelve refine (pS.(trm_elt) q (α · γ) (α · γε) (α · n₀) (Natε_S_inv _ (α · n₀) (α · nε)) _ _).
-      { unshelve refine (α · (IHn₀ p ! γ γε _ (Natε_S_inv _ n₀ nε) (refl _ _)).(val)). }
-      { unshelve refine (α · (IHn₀ p ! γ γε _ (Natε_S_inv _ n₀ nε) (refl _ _)).(spc)). }
+      { unshelve refine (α · (F (n₀ p !) _ (Natε_S_inv _ n₀ nε) (refl _ _)).(val)). }
+      { unshelve refine (α · (F (n₀ p !) _ (Natε_S_inv _ n₀ nε) (refl _ _)).(spc)). }
 
-    * revert γ γe γε nε.
-      refine (F_sind _ _); intros γ γε nε q α.
-      pose (e₁ := Nat_S_inv _ n nε n₀ e₀).
-      destruct e₁.
-
-      unshelve refine (
-        pS.(trm_rel) q (α · γ) (γε q α) q !
+    * set (e₁ := Nat_S_inv _ n nε n₀ e₀).
+      induction e₁.
+      unshelve refine (fun q α =>
+        pS.(trm_rel) q (α · γ) (α · γε) q !
           (α · n₀) (Natε_S_inv _ (α · n₀) (α · nε)) q !
-          (α · (IHn₀ p ! (ret γ) γε _ (refl _ _) (Natε_S_inv _ n₀ nε) (refl _ _)).(val))
-          (α · (IHn₀ p ! (ret γ) γε _ (refl _ _) (Natε_S_inv _ n₀ nε) (refl _ _)).(spc))
-      ).
-
-
-
-unshelve refine (Lam _ _).
-unshelve refine (Build_trm_aux _ (fun p => _) _).
-+ refine (@Ext_elim₀ Γ Nat p _ _).
-  intros γ γε n γe nε. simpl in n, nε.
-  generalize (refl _ (n p !)).
-  generalize (n p !) at 1 as n₀.
-  induction n₀ as [|p n₀ IHn₀]; intros e₀.
-  - simpl. unshelve econstructor.
-
-    * refine (fun q α => _).
-      change (
-        elt
-          (trm_elt P q (evl γ q α)
-             (α · (Θ γ γε γe))
-             (α · (@letΘ Γ Nat _ γ γε γe n)) (α · nε)) q !
-      ).
-      change (forall q (α : q ≤ p), Natε (α · (@letΘ _ Nat _ γ γε γe n))) in nε.
-
-      revert γ γe γε nε; refine (F_rect _ _); simpl; intros γ γε nε.
-
-      pose (e₁ := Nat_O_inv _ n nε e₀).
-
-      destruct e₁.
-
-      refine (pO.(trm_elt) q (α · γ) (γε q α)).
-
-    * revert γ γe γε nε.
-      refine (F_sind _ _); simpl; intros γ γε nε q α.
-      pose (e₁ := Nat_O_inv _ n nε e₀).
-      destruct e₁; simpl.
-      refine (pO.(trm_rel) _ _ _).
-
-  - unshelve econstructor.
-
-    * refine (fun q α => _).
-      revert γ γe γε nε; refine (F_rect _ _); simpl; intros γ γε nε.
-      pose (e₁ := Nat_S_inv _ n nε n₀ e₀).
-      destruct e₁.
-      unshelve refine (pS.(trm_elt) q (α · γ) (γε q α) (α · n₀) (Natε_S_inv _ (α · n₀) (α · nε)) _ _).
-      { unshelve refine (α · (IHn₀ p ! (ret γ) γε _ (refl _ _) (Natε_S_inv _ n₀ nε) (refl _ _)).(val)). }
-      { unshelve refine (α · (IHn₀ p ! (ret γ) γε _ (refl _ _) (Natε_S_inv _ n₀ nε) (refl _ _)).(spc)). }      
-
-    * revert γ γe γε nε.
-      refine (F_sind _ _); intros γ γε nε q α.
-      pose (e₁ := Nat_S_inv _ n nε n₀ e₀).
-      destruct e₁.
-
-      unshelve refine (
-        pS.(trm_rel) q (α · γ) (γε q α) q !
-          (α · n₀) (Natε_S_inv _ (α · n₀) (α · nε)) q !
-          (α · (IHn₀ p ! (ret γ) γε _ (refl _ _) (Natε_S_inv _ n₀ nε) (refl _ _)).(val))
-          (α · (IHn₀ p ! (ret γ) γε _ (refl _ _) (Natε_S_inv _ n₀ nε) (refl _ _)).(spc))
+          (α · (F _ _ (Natε_S_inv _ n₀ nε) (refl _ _)).(val))
+          (α · (F _ _ (Natε_S_inv _ n₀ nε) (refl _ _)).(spc))
       ).
 
 + intros p.
-  refine (Ext_elim₀_s _ _ _ _).
-  intros γ γε n γe; revert γ γe γε n.
-  refine (F_sind _ _).
   intros γ γε n nε.
   simpl in n, nε.
   assert (nε₀ := nε p !).
@@ -1052,6 +997,17 @@ Proof.
 reflexivity.
 Qed.
 
+Axiom funext : forall A (B : A -> Type) (f g : forall x : A, B x),
+  (forall x, f x = g x) -> f = g.
+Axiom funext_s : forall {A : SProp} (B : A -> Type) (f g : forall x : A, B x),
+  (forall x, f x = g x) -> f = g.
+
+Axiom Trm_ext : forall Γ A x xε y yε, x = y -> @Build_Trm Γ A x xε = @Build_Trm Γ A y yε.
+
+(* Set Fast Name Printing. *)
+
+Definition hide {A} {x : A} := x.
+
 Lemma Nat_rect_S : forall
   (Γ : Ctx)
   (P : Trm Γ (Prd Nat Unv))
@@ -1065,5 +1021,83 @@ Lemma Nat_rect_S : forall
   App (Nat_rect P pO pS) (App S n) =
   @App _ (Elt (App P n)) (Typ_subs (Wkn _ _) (Elt (App P (App S n)))) (App pS n) (App (Nat_rect P pO pS) n).
 Proof.
-Fail reflexivity (* fails *)
+intros.
+simpl.
+apply Trm_ext.
+apply funext; intros p; apply funext; intros γ; apply funext_s; intros γε.
+simpl.
+match goal with [ |- @eq _ (trm_elt pS p ?γl ?γεl _ _ _ _) _ ] => change γl with γ end.
+match goal with [ |- @eq _ (trm_elt pS p ?γl ?γεl _ _ _ _) _ ] => change γεl with γε end;
+match goal with [ |- @eq _ (trm_elt pS p _ _ ?n _ _ _) _ ] => set (n₀ := n) end.
+match goal with [ |- @eq _ (trm_elt pS p _ _ _ ?nεl _ _) _ ] => set (nε := nεl); clearbody nε end.
+match goal with [ |- @eq _ _ (trm_elt pS p _ _ _ ?nε₀ _ _) ] => set (nε' := nε₀); clearbody nε' end.
+let T := type of nε in let T' := type of nε' in unify T T'.
+match goal with [ |- @eq _ (trm_elt pS p _ _ _ _ _ ?pεl) _ ] => set (pε := pεl); clearbody pε end.
+let T := type of pε in change (@hide SProp T) in pε. 
+match goal with [ |- @eq _ (trm_elt pS p _ _ _ _ ?ul _) _ ] =>
+  set (u := ul); change ul with (@hide _ ul) in u
+end.
+match goal with [ |- @eq _ _ (trm_elt pS p _ _ _ _ ?ul _) ] =>
+  set (u' := ul); change ul with (@hide _ ul) in u'
+end.
+match goal with [ |- @eq _ _ (trm_elt pS p _ _ _ _ _ ?pεl) ] => set (pε' := pεl); clearbody pε' end.
+let T := type of pε' in change (@hide SProp T) in pε'.
+simpl in nε'.
+
+let T := type of nε in change (T : SProp) in nε'.
+unfold letΘ in *; simpl in *.
+
+change (
+
+eq (trm_elt pS p γ γε n₀ nε u pε)
+  (trm_elt pS p γ γε n₀ nε u' pε')
+
+).
+
+assert (u = u').
+{ unfold u, u', hide.
+clear u u'.
+
+apply funext; intros q; apply funext; intros α.
+
+clear pε pε'.
+clear nε'.
+
+match goal with [ |-
+  @eq _ (val _ _ _)
+  (val _ _ _)
+] =>
+(*   set (P₀ := P); change Q with P₀; *)
+(*   set (pO₀ := pO); change qO with pO₀; *)
+(*   set (pS₀ := pS); change qS with pS₀; *)
+  idtac
+end.
+match goal with [ |- @eq ?A ?t ?u ] => idtac t end.
+
+match goal with [ |-
+  @eq _ (val (Nat₀_rect ?P ?pO ?pS _ _ _ _ _ _ _) _ _)
+  (val (Nat₀_rect ?Q ?qO ?qS _ _ _ _ _ _ _) _ _)
+] =>
+  set (P₀ := P); change Q with P₀;
+  set (pO₀ := pO); change qO with pO₀;
+  set (pS₀ := pS); change qS with pS₀;
+  idtac
+end.
+
+match goal with [ |- @eq ?A ?t ?u ] => idtac u end.
+match goal with [ |- @eq ?A ?t ?u ] => idtac t end.
+
+refine (eq_refl).
+reflexivity.
+(* match goal with [ |- @eq ?A (eqn_rect _ _ ?e₀ _ _) _ ] => set (e := e₀); clearbody e end. *)
+(* let t := match type of e with @eqn ?A ?t ?u => t end in *)
+(* change e with (refl (forall q (α : q ≤ p), Nat₀ q) t). *)
+reflexivity.
+
+rewrite H.
+change e with (refl _ _).
+
+match goal with [ |- @eq ?A _ _ ] => pose A end.
+
+reflexivity. (* fails *)
 Abort.
