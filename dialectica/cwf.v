@@ -592,3 +592,118 @@ unshelve eapply trm_Π_eq_intro.
   match goal with [ |- _ ⊕ (ε (map ?f ?t)) = _ ] => change (ε (map ?f ?t)) with (Mlet t f) end.
   now rewrite Mlet_nul, Alg_id_r.
 Qed.
+
+(** Sum type and term formers *)
+
+Definition Sum {Γ : Ctx} (A B : Typ Γ) : Typ Γ.
+Proof.
+unshelve econstructor.
++ refine (fun γ => A.(typ_wit) γ + B.(typ_wit) γ)%type.
++ refine (fun γ s => match s with inl x => A.(typ_ctr) γ x | inr y => B.(typ_ctr) γ y end).
+Defined.
+
+Definition inl {Γ} (A B : Typ Γ) (t : Trm Γ A) : Trm Γ (Sum A B).
+Proof.
+unshelve econstructor.
++ refine (fun γ => inl (t.(trm_fwd) γ)).
++ refine (fun γ π => t.(trm_bwd) γ π).
+Defined.
+
+Definition inr {Γ} (A B : Typ Γ) (t : Trm Γ B) : Trm Γ (Sum A B).
+Proof.
+unshelve econstructor.
++ refine (fun γ => inr (t.(trm_fwd) γ)).
++ refine (fun γ π => t.(trm_bwd) γ π).
+Defined.
+
+Definition elim_Sum {Γ} {A B : Typ Γ} (P : Typ (ext Γ (Sum A B)))
+  (pl : Trm (ext Γ A) (typ_sub P (cns (A := Sum _ _)
+    (wkn A (idn Γ)) (inl (typ_sub A (wkn A (idn Γ))) (typ_sub B (wkn A (idn Γ))) rel0))))
+  (pr : Trm (ext Γ B) (typ_sub P (cns (A := Sum _ _)
+    (wkn B (idn Γ)) (inr (typ_sub A (wkn B (idn Γ))) (typ_sub B (wkn B (idn Γ))) rel0))))
+  (s : Trm Γ (Sum A B))
+  :
+    Trm Γ (typ_sub P (cns (A := Sum _ _) (idn _) s)).
+Proof.
+unshelve econstructor.
++ cbn.
+  refine (fun γ =>
+    match s.(trm_fwd) γ as s₀ return typ_wit P (pair γ s₀) with
+    | Datatypes.inl x => pl.(trm_fwd) (pair γ x)
+    | Datatypes.inr y => pr.(trm_fwd) (pair γ y)
+    end).
++ cbn.
+  refine (fun γ =>
+    match s.(trm_fwd) γ as s₀ return
+
+    forall (sb : typ_ctr (Sum A B) γ s₀ -> ctx_ctr Γ γ),
+
+    typ_ctr P (pair γ s₀)
+      match s₀ return typ_wit P (pair γ s₀) with
+      | Datatypes.inl x => trm_fwd pl {| fst := γ; snd := x |}
+      | Datatypes.inr y => trm_fwd pr {| fst := γ; snd := y |}
+      end -> ctx_ctr Γ γ
+
+  with
+
+  | Datatypes.inl x => fun sb πl =>
+    fst (pl.(trm_bwd) (pair γ x) πl) ⊕
+    (Mlet (pl.(trm_bwd) (pair γ x) πl).(snd) sb)
+  | Datatypes.inr y => fun sb πr =>
+    fst (pr.(trm_bwd) (pair γ y) πr) ⊕
+    (Mlet (pr.(trm_bwd) (pair γ y) πr).(snd) sb)
+  end (s.(trm_bwd) γ)
+
+  ).
+
+Defined.
+
+Lemma Sum_sub : forall Γ Δ (A B : Typ Γ) (σ : Sub Δ Γ), typ_sub (Sum A B) σ = Sum (typ_sub A σ) (typ_sub B σ).
+Proof.
+reflexivity.
+Qed.
+
+Lemma inl_sub : forall Γ Δ (A B : Typ Γ) (t : Trm Γ A) (σ : Sub Δ Γ),
+  trm_sub (inl A B t) σ = inl (typ_sub A σ) (typ_sub B σ) (trm_sub t σ).
+Proof.
+reflexivity.
+Qed.
+
+Lemma inr_sub : forall Γ Δ (A B : Typ Γ) (t : Trm Γ B) (σ : Sub Δ Γ),
+  trm_sub (inr A B t) σ = inr (typ_sub A σ) (typ_sub B σ) (trm_sub t σ).
+Proof.
+reflexivity.
+Qed.
+
+Lemma elim_Sum_sub : forall Γ Δ A B P pl pr s (σ : Sub Δ Γ),
+  trm_sub (@elim_Sum Γ A B P pl pr s) σ =
+  @elim_Sum Δ (typ_sub A σ) (typ_sub B σ) (typ_sub P (lft _ σ)) (trm_sub pl (lft _ σ)) (trm_sub pr (lft _ σ)) (trm_sub s σ).
+Proof.
+intros; unshelve eapply trm_eq_intro.
++ reflexivity.
++ cbn; intros γ.
+  destruct s as [sf sb]; cbn.
+  set (sb₀ := sb (sub_fwd σ γ)).
+  set (sf₀ := sf (sub_fwd σ γ)) in sb₀ |- *.
+  clearbody sb₀; clear sb.
+  clearbody sf₀.
+  destruct sf₀ as [x|y]; cbn.
+  - cbn; intros.
+    rewrite Sub_add; f_equal.
+    unfold Mlet; now rewrite Sub_alg, map_map.
+  - cbn; intros.
+    rewrite Sub_add; f_equal.
+    unfold Mlet; now rewrite Sub_alg, map_map.
+Qed.
+
+Lemma elim_Sum_inl : forall Γ A B P pl pr t,
+  @elim_Sum Γ A B P pl pr (inl A B t) = trm_sub pl (cns (idn _) t).
+Proof.
+reflexivity.
+Qed.
+
+Lemma elim_Sum_inr : forall Γ A B P pl pr t,
+  @elim_Sum Γ A B P pl pr (inr A B t) = trm_sub pr (cns (idn _) t).
+Proof.
+reflexivity.
+Qed.
