@@ -161,10 +161,6 @@ Qed.
 Record isAlg (A : Type) (hA : M A -> A) (nulA : A) (addA : A -> A -> A) := {
   alg_ret : forall x, hA (ret x) = x;
   alg_bnd : forall (x : M (M A)), hA (map hA x) = hA (bind x (fun x => x));
-  alg_id_l : forall x, addA nulA x = x;
-  alg_id_r : forall x, addA x nulA = x;
-  alg_assoc : forall x y z, addA x (addA y z) = addA (addA x y) z;
-  alg_comm : forall x y, addA x y = addA y x;
   alg_run_nul : hA (nul _) = nulA;
   alg_run_add : forall x y, hA (add x y) = addA (hA x) (hA y);
 }.
@@ -207,26 +203,6 @@ rewrite <- Alg_bind₀; f_equal.
 now rewrite map_map.
 Qed.
 
-Lemma Alg_id_l : forall {A} {algA : Alg A} (x : A), ∅ ⊕ x = x.
-Proof.
-intros; eapply alg_id_l, unbox, algA.
-Qed.
-
-Lemma Alg_id_r : forall {A} {algA : Alg A} (x : A), x ⊕ ∅ = x.
-Proof.
-intros; eapply alg_id_r, unbox, algA.
-Qed.
-
-Lemma Alg_assoc : forall {A} {algA : Alg A} (x y z : A), x ⊕ (y ⊕ z) = (x ⊕ y) ⊕ z.
-Proof.
-intros; eapply alg_assoc, unbox, algA.
-Qed.
-
-Lemma Alg_comm : forall {A} {algA : Alg A} (x y : A), x ⊕ y = y ⊕ x.
-Proof.
-intros; eapply alg_comm, unbox, algA.
-Qed.
-
 Lemma Alg_run_nul : forall {A} {algA : Alg A}, ε (nul _) = ∅.
 Proof.
 intros; eapply alg_run_nul, unbox, algA.
@@ -236,6 +212,36 @@ Lemma Alg_run_add : forall {A} {algA : Alg A} (α₁ α₂ : M A), ε (add α₁
 Proof.
 intros; eapply alg_run_add, unbox, algA.
 Qed.
+
+Lemma Alg_id_l : forall {A} {algA : Alg A} (x : A), ∅ ⊕ x = x.
+Proof.
+intros.
+rewrite <- (Alg_ret x), <- Alg_run_nul, <- Alg_run_add.
+now rewrite add_id_l.
+Qed.
+
+Lemma Alg_id_r : forall {A} {algA : Alg A} (x : A), x ⊕ ∅ = x.
+Proof.
+intros.
+rewrite <- (Alg_ret x), <- Alg_run_nul, <- Alg_run_add.
+now rewrite add_id_r.
+Qed.
+
+Lemma Alg_assoc : forall {A} {algA : Alg A} (x y z : A), x ⊕ (y ⊕ z) = (x ⊕ y) ⊕ z.
+Proof.
+intros.
+rewrite <- (Alg_ret x), <- (Alg_ret y), <- (Alg_ret z), <- !Alg_run_add.
+now rewrite add_assoc.
+Qed.
+
+Lemma Alg_comm : forall {A} {algA : Alg A} (x y : A), x ⊕ y = y ⊕ x.
+Proof.
+intros.
+rewrite <- (Alg_ret x), <- (Alg_ret y), <- !Alg_run_add.
+now rewrite add_comm.
+Qed.
+
+(** Important algebra formers *)
 
 Instance Alg_M {A} : Alg (M A).
 Proof.
@@ -248,10 +254,6 @@ unshelve econstructor.
   - intros α; unfold map.
     rewrite !bind_assoc; f_equal; apply funext; intros β.
     now rewrite bind_ret_l.
-  - intros; apply add_id_l.
-  - intros; apply add_id_r.
-  - intros; apply add_assoc.
-  - intros; apply add_comm.
   - now rewrite bind_nul.
   - intros; now rewrite bind_add.
 Defined.
@@ -269,10 +271,6 @@ unshelve econstructor.
     rewrite <- map_map with (g := ε), Alg_bind₀;
     f_equal; unfold map; rewrite !bind_assoc; f_equal;
     apply funext; intros β; now rewrite bind_ret_l.
-  - intros [x y]; cbn; f_equal; apply Alg_id_l.
-  - intros [x y]; cbn; f_equal; apply Alg_id_r.
-  - intros [x y] [x' y'] [x'' y'']; cbn; f_equal; apply Alg_assoc.
-  - intros [x y] [x' y']; cbn; f_equal; apply Alg_comm.
   - f_equal; now rewrite map_nul, Alg_run_nul.
   - intros; f_equal; cbn; now rewrite map_add, Alg_run_add.
 Defined.
