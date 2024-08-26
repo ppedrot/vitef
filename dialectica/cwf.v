@@ -1,3 +1,68 @@
+(** This file defines a CwF model of the Dialectica transformation.
+
+Dialectica is a famous logical interpretation of intuitionistic arithmetic
+due to Gödel. In modern terms, it can be seen as a realizability
+interpretation: proofs [p : A] are interpreted as programs {p} satisfying
+a predicate {A} obtained systematically from the formula A.
+
+Compared with the more standard Kreisel realizability which is basically what
+we call today "erasure", Dialectica endows proofs of [A → B] with more
+data than just a function from [A] to [B]. Namely, it also gives
+information about how this function uses its argument. This corresponds
+computationally to the ability to track the stacks against which variables
+are dereferenced. See my PhD "A Materialist Dialectica" for more detail on
+the topic.
+
+The original presentation of Dialectica is problematic from a computational point
+of view as it does not preserve the equational theory of the original logic seen
+as a fancy λ-calculus. From a Curry-Howard point of view, this is VERY BAD (TM).
+Thankfully, some variants are better behaved. This is the case of the Diller-Nahm
+variant whose introduction was motivated by totally different reasons, namely
+the requirement of decidability of orthogonality in the original Dialectica.
+
+We show in this file that assuming some abstract notion of multiset, i.e. a
+monad equipped with a commutative monoid structure compatible with the monadic
+operations, a.k.a. a "semi-ringoid", one can define a Dialectica model of
+dependent types. This precise construction was never really published, although
+there are hints of this in my PhD and in a TYPES'17 abstract coauther with Andrej
+Bauer. There was even a companion handwritten draft that somehow ended up on the
+internet via some Google Drive, but its precise location has long been lost
+to the mist of time.
+
+This construction can be seen as a simplification of the Moss-von Glehn
+Diller-Nahm model described in their paper
+
+"Dialectica models of type theory" (https://arxiv.org/abs/2105.00283).
+
+Trigger warning: the above paper is way too categorical to my taste
+and I have constructive evidence that some other people got their brain
+clogged by the high-fibration content found in there. This very file
+should hopefully make it easy to grasp what is really going on there
+for mere mortals that were not sprung out of Grothendieck's thigh.
+
+For readability, we follow the category with families (CwF) presentation
+of type theory. This is still a bit too category-friendly to my taste,
+but despited the name CwFs are rather fine even from a type-theoretical
+point of view. (I suspect the name is just to lure category theorists
+into type theory, most of the CwF stuff is pretty a-categorical.)
+
+CwF allow stratifying the definitions of objects in contexts
+Γ, Δ : Ctx, substitutions between contexts σ, τ : Sub Γ Δ,
+types in a context A B : Typ Γ and terms Trm Γ A. Substitutions
+act on these objects in the expected way and we get a bunch of type
+and term formers together with equations.
+
+The Dialectica CwF construction given here uses the ambient type theory as
+a target CwF, as this makes a lot of stuff definitional, which means less
+coherence hell. In theory we could abstract this away and get a more general
+transformation which would form a syntactic Dialectica model of MLTT, assuming
+some magic in the target theory.
+
+*)
+
+(** For simplicity, we turn Coq into a degraded topos, assuming funext and blurring
+  the lines between Prop and SProp. *)
+
 Inductive Box (A : Type) : SProp := box : A -> Box A.
 
 Axiom funext : forall (A : Type) (B : A -> Type) (f g : forall x : A, B x),
@@ -26,6 +91,8 @@ Qed.
 
 Definition prod (A B : Type) := sig A (fun _ => B).
 
+(** We axiomatize our abstract multiset structure. It is a monad. *)
+
 Axiom M : Type -> Type.
 Axiom ret : forall {A : Type}, A -> M A.
 Axiom bind : forall {A B : Type}, M A -> (A -> M B) -> M B.
@@ -35,6 +102,8 @@ Axiom bind_ret_r : forall A (α : M A), bind α ret = α.
 Axiom bind_assoc : forall A B C (α : M A) f g,
   @bind B C (@bind A B α f) g = bind α (fun x => bind (f x) g).
 
+(** The abstract multiset is furthermore a commutative monoid. *)
+
 Axiom nul : forall A, M A.
 Axiom add : forall {A}, M A -> M A -> M A.
 
@@ -43,11 +112,15 @@ Axiom add_id_r : forall A (α : M A), add α (nul A) = α.
 Axiom add_assoc : forall A (α₁ α₂ α₃ : M A), add α₁ (add α₂ α₃) = add (add α₁ α₂) α₃.
 Axiom add_comm : forall A (α₁ α₂ : M A), add α₁ α₂ = add α₂ α₁.
 
+(** The commutative monoid operations distribute over the monad operations. *)
+
 Axiom bind_nul : forall A B (f : A -> M B), bind (nul A) f = nul B.
 Axiom bind_add : forall A B (α₁ α₂ : M A) (f : A -> M B), bind (add α₁ α₂) f = add (bind α₁ f) (bind α₂ f).
 
 Axiom bind_nul_rev : forall A B (α : M A), bind α (fun _ => nul B) = nul B.
 Axiom bind_add_rev : forall A B (α : M A) (f g : A -> M B), bind α (fun x => add (f x) (g x)) = add (bind α f) (bind α g).
+
+(** Derived operations and lemmas. *)
 
 Definition map {A B} (f : A -> B) (α : M A) : M B := bind α (fun x => ret (f x)).
 
@@ -82,6 +155,9 @@ Proof.
 intros; apply bind_add.
 Qed.
 
+(** We define algebras for our abstract multiset:
+    basically a monad algebra compatible with the monoidal structure. *)
+
 Record isAlg (A : Type) (hA : M A -> A) (nulA : A) (addA : A -> A -> A) := {
   alg_ret : forall x, hA (ret x) = x;
   alg_bnd : forall (x : M (M A)), hA (map hA x) = hA (bind x (fun x => x));
@@ -107,6 +183,8 @@ Arguments alg_add {A _}.
 Notation "'ε'" := (@alg_fun _ _).
 Notation "∅" := (@alg_nul _ _).
 Notation "x ⊕ y" := (@alg_add _ _ x y) (at level 35).
+
+(** A bunch of helper lemmas. *)
 
 Lemma Alg_ret : forall {A} {algA : Alg A} (x : A), ε (ret x) = x.
 Proof.
@@ -199,6 +277,8 @@ unshelve econstructor.
   - intros; f_equal; cbn; now rewrite map_add, Alg_run_add.
 Defined.
 
+(** Let-binding for algebras. Give me my CBPV model already! *)
+
 Definition Mlet {A B} {algB : Alg B} (α : M A) (f : A -> B) : B := ε (map f α).
 
 Lemma Mlet_ret : forall {A B} {algB : Alg B} (x : A) (f : A -> B), Mlet (ret x) f = f x.
@@ -248,7 +328,17 @@ apply funext; intros x.
 now rewrite Alg_run_add, !Alg_ret.
 Qed.
 
-(** The Dialectica CwF *)
+(** The Dialectica CwF proper *)
+
+(** A type A in the simply-typed Dialectica is interpreted as:
+  - a witness type W(A) : Type
+  - a counter type C(A) : W(A) → Type.
+
+  Since contexts are just glorified simple types, they have a similar
+  structure. Note that we request the counter types of contexts to be
+  M-algebras, which we do not for normal types. The reason is that we will
+  get the algebra structure for free in context extension. Basically,
+  this is a manifestation of a CBPV adjunction in call-by-name. *)
 
 Record Ctx := {
   ctx_wit : Type;
@@ -261,6 +351,22 @@ Record isSub {Γ Δ : Ctx}
   (bwd : forall (γ : ctx_wit Γ), ctx_ctr Δ (fwd γ) -> ctx_ctr Γ γ) := {
   sub_alg : forall γ π, bwd γ (ε π) = ε (map (bwd γ) π);
 }.
+
+(** Morphisms between contexts W(Γ), C(Γ) and W(Δ), C(Δ) are made of:
+  - a forward substitution σ⁺ : W(Γ) → W(Δ)
+  - a backward substitution σ⁻ : forall (γ : W(Γ)), C(Δ)[σ(γ)] → C(Γ)[γ]
+
+  Note that σ⁻ goes the other way around: this two-way interpretation of morphisms
+  is the special signature of Dialectica.
+
+  We further mandate that backward substitutions are algebra morphisms for good
+  measure. This is once again textbook (dependent) CBPV.
+
+  As a general principle, W and forward components will be basically the underlying
+  equivalent structure from the target CwF (except for functions). The interesting
+  stuff you should be looking at are C types and backward components.
+
+*)
 
 Record Sub (Γ Δ : Ctx) := {
   sub_fwd : forall (γ : ctx_wit Γ), ctx_wit Δ;
@@ -290,6 +396,8 @@ rewrite <- Alg_run_add, Sub_alg, !map_add, !map_ret.
 now rewrite Alg_run_add, !Alg_ret.
 Qed.
 
+(** Basic substitution formers: Sub is a category. [HE SAID THE WORD!] *)
+
 Definition idn (Γ : Ctx) : Sub Γ Γ.
 Proof.
 unshelve econstructor.
@@ -307,6 +415,13 @@ unshelve econstructor.
 + do 2 constructor.
   intros; now rewrite !Sub_alg, map_map.
 Defined.
+
+(** We now define (dependent) types. They're just like contexts,
+    except that we will get the M-algebra structure sneakily out
+    of context extension. The reason is that in CBPV, call-by-name
+    types are interpreted as computation types, and we interpret
+    [Γ, A] as [Γ], U [A]. The U functor is here the free M-algebra
+    functor. *)
 
 Record Typ (Γ : Ctx) := {
   typ_wit : forall (γ : Γ.(ctx_wit)), Type;
@@ -333,6 +448,14 @@ Proof.
 reflexivity.
 Defined.
 
+(** We define terms. Just like substitutions, there are two
+    parts to a term: a forward morphism and a backward morphism.
+    The second one depends on the first one. Once again due to
+    CBPV being hidden behind the curtains, we do not need the fact that
+    the backward morphism is an algebra morphism. It wouldn't make
+    sense anyway as the type is not even an algebra. This will appear
+    for free at some later point. *)
+
 Record Trm (Γ : Ctx) (A : Typ Γ) := {
   trm_fwd : forall (γ : Γ.(ctx_wit)), typ_wit A γ;
   trm_bwd : forall (γ : Γ.(ctx_wit)), typ_ctr A γ (trm_fwd γ) -> ctx_ctr Γ γ;
@@ -340,6 +463,8 @@ Record Trm (Γ : Ctx) (A : Typ Γ) := {
 
 Arguments trm_fwd {_ _}.
 Arguments trm_bwd {_ _}.
+
+(* A helper function *)
 
 Lemma trm_eq_intro : forall Γ A (t u : Trm Γ A) (e : forall γ, t.(trm_fwd) γ = u.(trm_fwd) γ),
   (forall γ π, t.(trm_bwd) γ π = u.(trm_bwd) γ (eq_rect _ (typ_ctr A γ) π _ (e γ))) ->
@@ -372,7 +497,8 @@ Proof.
 reflexivity.
 Qed.
 
-(** Context extension *)
+(** Context extension. W(Γ, A) is W(Γ), W(A) and
+    C(Γ, A)[γ, x] is just C(Γ)[γ] × M (C(A)[x]). Note the M. *)
 
 Definition ext (Γ : Ctx) (A : Typ Γ) : Ctx.
 Proof.
@@ -384,6 +510,11 @@ unshelve econstructor.
   - apply ctx_alg.
   - apply Alg_M.
 Defined.
+
+(** Weakening. As mentioned before, this is just weakening on the
+    forward component. On the backward component, we need to pull
+    a proof W(Γ), x : W(A) ⊢ M (C(A)[x]) out of thin air. Just pick
+    the empty set. This makes the function algebraic. *)
 
 Definition wkn {Γ Δ} (A : Typ Γ) (σ : Sub Γ Δ) : Sub (ext Γ A) Δ.
 Proof.
@@ -405,6 +536,11 @@ Proof.
 reflexivity.
 Qed.
 
+(** Lifting. Again, just lifting on the forward component.
+    On the backward component we must provide an algebraic proof
+    of W(Γ), x : W(A) ⊢ M (C(A)[x]) → M (C(A)[x]). That will be
+    the identity. *)
+
 Lemma lft {Γ Δ} (A : Typ Δ) (σ : Sub Γ Δ) : Sub (ext Γ (typ_sub A σ)) (ext Δ A).
 Proof.
 unshelve econstructor.
@@ -415,12 +551,24 @@ unshelve econstructor.
   rewrite !Sub_alg, !map_map; reflexivity.
 Defined.
 
+(** The one variable, to bring them all and in the darkness bind them.
+    Forward component is again standard. For the backward one, this is
+    the dual situation to weakening, we must now come up with a proof
+    of C(Γ)[γ] but nothing in sight. The empty one will do. *)
+
 Definition rel0 {Γ : Ctx} {A : Typ Γ} : Trm (ext Γ A) (typ_sub A (wkn A (idn _))).
 Proof.
 unshelve econstructor.
 + refine (fun γ => γ.(snd)).
 + refine (fun γ π => pair ∅ (ret π)).
 Defined.
+
+(** Extension of a substitution. Forward component is standard.
+    Now we get to see something really interesting in the backward component.
+    We have to produce a C(Δ) but there are two potential ways to get one:
+    one coming from the backward term, one from the backward substitution.
+    If we pick only one arbitrarily, we'll break the equational theory of this
+    former. Fair enough, we can just sum them up as C(Γ) is a monoid. *)
 
 Definition cns {Γ Δ} {A : Typ Γ} (σ : Sub Δ Γ) (x : Trm Δ (typ_sub A σ)) : Sub Δ (ext Γ A).
 Proof.
@@ -445,6 +593,22 @@ Qed.
 
 (** Product type and term formers *)
 
+(** This is LE Dialectica type former. Rather than just a function,
+    the witness type packs up some information about the use of variables in
+    the forward function. Namely,
+
+    W(Π (x : A). B) := Π(x : W(A)). Σ(y : W(B)). C(B)[y] → M (C(A)[x])
+
+    Note the parasitic reverse component C(B)[y] → M (C(A)[x]), the quintessence
+    of Dialectica-ness.
+
+    For the counter type, this is just your favourite KAM stack former
+    with dependent noise.
+
+    C(Π(x : A). B)[f] := Σ(x : W(A)). C(B)[fst (f x)]
+
+ *)
+
 Definition Π {Γ : Ctx} (A : Typ Γ) (B : Typ (ext Γ A)) : Typ Γ.
 Proof.
 unshelve econstructor.
@@ -457,6 +621,9 @@ unshelve econstructor.
   ).
 Defined.
 
+(** Lambda-abstraction. As a good call-by-name λ, this is basically
+    an isomorphism known by the wisest experts as curryfication. *)
+
 Definition lam {Γ : Ctx} {A : Typ Γ} {B : Typ (ext Γ A)} (t : Trm (ext Γ A) B) : Trm Γ (Π A B).
 Proof.
 unshelve econstructor.
@@ -465,6 +632,10 @@ unshelve econstructor.
   - refine (fun π => (t.(trm_bwd) (pair γ x) π).(snd)).
 + refine (fun γ π => (t.(trm_bwd) (pair γ π.(fst)) π.(snd)).(fst)).
 Defined.
+
+(** Application. Same phenomenon as for [cns], there are two ways a variable
+    can be used in [t u]. Either it is used directly in [t] or it is used in
+    [u] through the uses of the argument in [t]. We must merge these two paths. *)
 
 Definition app {Γ : Ctx} {A : Typ Γ} {B : Typ (ext Γ A)} (t : Trm Γ (Π A B)) (u : Trm Γ A) :
   Trm Γ (typ_sub B (cns (idn Γ) u)).
@@ -499,12 +670,15 @@ unfold Mlet; rewrite Sub_alg, !map_map.
 reflexivity.
 Qed.
 
+(** The β rule is miraculously strict. *)
+
 Lemma lam_app_beta : forall {Γ : Ctx} {A : Typ Γ} {B : Typ (ext Γ A)}
   (t : Trm (ext Γ A) B) (u : Trm Γ A), app (lam t) u = trm_sub t (cns (idn Γ) u).
 Proof.
 reflexivity.
 Qed.
 
+(* Some like it HoTT... *)
 Lemma trm_Π_eq_intro : forall {Γ : Ctx} {A : Typ Γ} {B : Typ (ext Γ A)} (t u : Trm Γ (Π A B))
   (ef : forall γ x, (t.(trm_fwd) γ x).(fst) = (u.(trm_fwd) γ x).(fst)),
   (forall γ x π, (t.(trm_fwd) γ x).(snd) π = (u.(trm_fwd) γ x).(snd) (eq_rect _ _ π _ (ef γ x))) ->
@@ -561,20 +735,7 @@ unshelve eapply trm_eq_intro.
     reflexivity.
 Qed.
 
-Lemma lam_eta_fwd : forall {Γ : Ctx} {A : Typ Γ} {B : Typ (ext Γ A)} (t : Trm Γ (Π A B)) γ,
-  trm_fwd (lam (@app (ext Γ A) (typ_sub A (wkn _ (idn _))) (typ_sub B (lft A _)) (trm_sub t (wkn A (idn Γ))) rel0)) γ =
-  trm_fwd t γ.
-Proof.
-intros; cbn.
-apply funext; intros x; cbn.
-apply (f_equal (pair (fst (trm_fwd t γ x)))).
-apply funext; intros π; cbn in *.
-rewrite add_id_l, map_map; cbn.
-unfold map; rewrite bind_assoc.
-etransitivity; [|apply bind_ret_r].
-f_equal; apply funext; intros ρ.
-now rewrite bind_ret_l.
-Qed.
+(** The η rule *)
 
 Lemma lam_eta : forall {Γ : Ctx} {A : Typ Γ} {B : Typ (ext Γ A)} (t : Trm Γ (Π A B)),
   lam (@app (ext Γ A) (typ_sub A (wkn _ (idn _))) (typ_sub B (lft A _)) (trm_sub t (wkn A (idn Γ))) rel0) = t.
@@ -594,6 +755,16 @@ unshelve eapply trm_Π_eq_intro.
 Qed.
 
 (** Sum type and term formers *)
+
+(** Nothing to see here.
+
+    W(A + B) := W(A) + W(B)
+    C(A + B)[inl x] := C(A)[x]
+    C(A + B)[inr y] := C(B)[y]
+
+    The intuitionistic content is preserved. In particular we inherit canonicity.
+
+*)
 
 Definition Sum {Γ : Ctx} (A B : Typ Γ) : Typ Γ.
 Proof.
