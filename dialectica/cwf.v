@@ -64,14 +64,20 @@ Set Universe Polymorphism.
 Set Polymorphic Inductive Cumulativity.
 
 (** For simplicity, we turn Coq into a degraded topos, assuming funext and blurring
-  the lines between Prop and SProp. *)
+  the line.s between Prop and SProp. *)
 
 Inductive Box@{i} (A : Type@{i}) : SProp := box : A -> Box A.
 
 Axiom funext : forall (A : Type) (B : A -> Type) (f g : forall x : A, B x),
   (forall x, f x = g x) -> f = g.
 Axiom pirrel : forall (A : Prop) (x y : A), x = y.
-Axiom unbox : forall (A : Prop), Box A -> A.
+Axiom unbox : forall {A : Prop}, Box A -> A.
+
+Lemma apeq : forall {A} {B : A -> Type} (f g : forall x : A, B x) (x : A),
+  f = g -> f x = g x.
+Proof.
+now intros * [].
+Qed.
 
 Set Primitive Projections.
 
@@ -90,6 +96,19 @@ Proof.
 intros.
 destruct p as [x y], q as [x' y']; cbn in *.
 destruct e; f_equal; assumption.
+Qed.
+
+Lemma sig_eq_elim_snd : forall A B (x : A) (y z : B x),
+  pair x y = pair x z -> y = z.
+Proof.
+intros.
+set (p := pair x y) in *.
+set (q := pair x z) in *.
+refine (let e : fst p = fst q := eq_refl in _).
+change (match e in _ = x return B x with eq_refl => snd p end = snd q).
+assert (rw : e = f_equal fst H) by apply pirrel.
+rewrite rw; clear rw e; clearbody p q.
+destruct H; reflexivity.
 Qed.
 
 Definition prod (A B : Type) := sig A (fun _ => B).
@@ -483,7 +502,7 @@ Record Trm (Γ : Ctx) (A : Typ Γ) := {
 Arguments trm_fwd {_ _}.
 Arguments trm_bwd {_ _}.
 
-(* A helper function *)
+(* Helper functions *)
 
 Lemma trm_eq_intro : forall Γ A (t u : Trm Γ A) (e : forall γ, t.(trm_fwd) γ = u.(trm_fwd) γ),
   (forall γ π, t.(trm_bwd) γ π = u.(trm_bwd) γ (eq_rect _ (typ_ctr A γ) π _ (e γ))) ->
@@ -496,6 +515,20 @@ apply funext; intros γ; apply funext; intros π.
 specialize (H γ π).
 replace (e γ) with (@eq_refl _ (tf γ)) in H by apply pirrel.
 apply H.
+Qed.
+
+Lemma trm_eq_elim_bwd : forall Γ A (t : forall γ : ctx_wit Γ, typ_wit A γ)
+  (φ ψ :  forall γ : ctx_wit Γ, typ_ctr A γ (t γ) -> ctx_ctr Γ γ),
+  Build_Trm Γ A t φ = Build_Trm Γ A t ψ -> φ = ψ.
+Proof.
+intros.
+set (t1 := {| trm_fwd := t; trm_bwd := φ |}) in *.
+set (t2 := {| trm_fwd := t; trm_bwd := ψ |}) in *.
+refine (let e : trm_fwd t1 = trm_fwd t2 := eq_refl in _).
+change (match e in _ = x return (forall γ : ctx_wit Γ, typ_ctr A γ (x γ) -> ctx_ctr Γ γ) with eq_refl => trm_bwd t1 end = trm_bwd t2).
+assert (rw : e = f_equal trm_fwd H) by apply pirrel.
+rewrite rw; clear rw e; clearbody t1 t2.
+destruct H; reflexivity.
 Qed.
 
 Definition trm_sub {Γ Δ : Ctx} {A : Typ Γ} (x : Trm Γ A) (σ : Sub Δ Γ) : Trm Δ (typ_sub A σ).
@@ -1093,7 +1126,15 @@ intros; unshelve eapply trm_eq_intro.
 + cbn; intros γ [].
 Qed.
 
-(** Effects *)
+(** Effects.
+
+  We study here linearity in the style of Munch-Maccagnoni. This
+  is a purely equational property that only makes sense in
+  call-by-name. We do not need to know anything about the model
+  itself to state linearity, we just need a very weak kind of
+  positive boxing type that is the unary version of sum types.
+
+*)
 
 (** The type Pack is basically a unary sum type. It embodies the
     implicit ambient CBPV comonad. *)
@@ -1174,3 +1215,238 @@ intros * H; unshelve eapply trm_eq_intro.
     rewrite e; clear e.
     apply H.
 Qed.
+
+Lemma linear_elim : forall {Γ : Ctx} {A B : Typ Γ} (t : Trm (ext Γ A) (typ_sub B _)) γ x π,
+  linear t -> map ret (snd (trm_bwd t (pair γ x) π)) = ret (snd (trm_bwd t (pair γ x) π)).
+Proof.
+intros * Ht.
+unfold linear in Ht.
+apply trm_eq_elim_bwd in Ht; cbn in Ht.
+apply apeq with (x := pair γ x) in Ht; cbn in Ht.
+apply apeq with (x := π) in Ht; cbn in Ht.
+rewrite !Alg_id_r in Ht.
+rewrite !map_map in Ht; cbn in Ht.
+let T := type of Ht in match T with pair (_ ⊕ ?t) _ = _ => assert (e : t = ∅) end.
+{ apply Mlet_nul. }
+rewrite e in Ht; clear e; rewrite !Alg_id_r in Ht.
+apply sig_eq_elim_snd in Ht.
+rewrite !add_id_l in Ht.
+etransitivity; [|apply Ht]; clear Ht.
+unfold map; rewrite !bind_assoc; f_equal.
+apply funext; intros ρ.
+now rewrite bind_ret_l, add_id_l.
+Qed.
+
+(** We can generalize linearity by considering functions using their
+    argument α times where α ∈ 𝔸, the ambient semiring of the model
+    defined as 𝔸 := M 1. Linear functions are then functions using
+    their arguments once.
+
+    This is a generalization of graded and quantitative type theories.
+    In our Dialectica model the number of times a function uses its argument
+    need not be uniform in the argument.
+
+*)
+
+Definition 𝔸 := M unit.
+
+Definition measure {A : Type} (α : M A) := map (fun _ => tt) α.
+
+Lemma measure_map : forall A B α (f : A -> B),
+  measure (map f α) = measure α.
+Proof.
+intros; unfold measure.
+now rewrite map_map.
+Qed.
+
+Lemma measure_add : forall A (α β : M A),
+  measure (add α β) = add (measure α) (measure β).
+Proof.
+intros; unfold measure, map.
+now rewrite bind_add.
+Qed.
+
+(** Ideally we should be able to describe what a context grading is in the abstract, following
+    the CwF style. For simplicity we stick here to an inductive definition of context grading
+    which is essentially a semiring element for each context variable. This requires us to
+    only consider syntactic contexts that are inductively built up as chains of context
+    extensions. *)
+
+Inductive iCtx : Ctx -> Type :=
+| ictx_eps : iCtx eps
+| ictx_ext : forall Γ (A : Typ Γ), iCtx Γ -> iCtx (ext Γ A).
+
+(** A context grading is then defined syntactically. TODO: find a semantic counterpart. *)
+
+Fixpoint grading {Γ} (iΓ : iCtx Γ) : Set :=
+match iΓ return Set with
+| ictx_eps => unit
+| ictx_ext Γ A iΓ => prod (grading iΓ) (option 𝔸)
+end.
+
+(** Any grading on Γ can be seen as a property over what amounts to the backward component of
+    inhabitants of Trm Γ 1. A semantic notion of grading should be defined similarly, but there
+    are a few algebraic side-conditions to satisfy. *)
+
+Fixpoint grading_eval {Γ iΓ}  : forall (μ : grading iΓ), (forall γ : ctx_wit Γ, ctx_ctr Γ γ -> Prop) :=
+match iΓ in iCtx Γ return grading iΓ -> (forall γ : ctx_wit Γ, ctx_ctr Γ γ -> Prop) with
+| ictx_eps => fun μ _ _ => True
+| ictx_ext Γ A iΓ => fun μ γ π =>
+  grading_eval μ.(fst) γ.(fst) π.(fst) /\
+  match μ.(snd) with
+  | None => True
+  | Some r => measure π.(snd) = r
+  end
+end.
+
+(*
+Record grading (Γ : Ctx) := {
+  grd_fun : forall γ : Γ.(ctx_wit), Γ.(ctx_ctr) γ -> 𝔸 -> Prop
+}.
+*)
+
+Coercion grading_eval : grading >-> Funclass.
+
+(** Gradings inherit the algebraic structure of the multisets. *)
+
+Fixpoint grading_add {Γ} {iΓ : iCtx Γ} {struct iΓ} : forall (μ₁ μ₂ : grading iΓ), grading iΓ :=
+match iΓ return grading iΓ -> grading iΓ -> grading iΓ with
+| ictx_eps => fun μ₁ μ₂ => tt
+| ictx_ext Γ A iΓ => fun μ₁ μ₂ =>
+  pair
+    (@grading_add _ _ μ₁.(fst) μ₂.(fst))
+    (match μ₁.(snd) with None => None | Some r₁ => match μ₂.(snd) with None => None | Some r₂ => Some (r₁ ⊕ r₂) end end)
+end.
+
+Fixpoint grading_mul {Γ} {iΓ : iCtx Γ} (r : 𝔸) {struct iΓ} : forall (μ : grading iΓ), grading iΓ :=
+match iΓ return grading iΓ -> grading iΓ with
+| ictx_eps => fun μ => tt
+| ictx_ext Γ A iΓ => fun μ =>
+  pair
+    (@grading_mul _ _ r μ.(fst))
+    (match μ.(snd) with None => None | Some s => Some (Mlet r (fun _ => s)) end)
+end.
+
+(*
+Definition grading_nul {Γ : Ctx} : grading Γ.
+Proof.
+unshelve econstructor.
++ refine (fun γ π r => π = ∅).
+Defined.
+*)
+
+(*
+Definition grading_add {Γ : Ctx} (μ₁ μ₂ : grading Γ) : grading Γ.
+Proof.
+unshelve econstructor.
++ refine (fun γ π r => exists π₁, exists π₂, π = π₁ ⊕ π₂ /\ μ₁ γ π₁ r /\ μ₂ γ π₂ r).
+Defined.
+
+Definition grading_mul {Γ : Ctx} (r : 𝔸) (μ : grading Γ) : grading Γ.
+Proof.
+unshelve econstructor.
++ refine (fun γ π s => μ γ π (bind s (fun _ => r))).
+Defined.
+*)
+
+Lemma grading_mul_intro : forall Γ iΓ A r (μ : grading iΓ) (α : M A) γ (f : A -> ctx_ctr Γ γ),
+  measure α = r ->
+  (forall x : A, μ γ (f x)) ->
+  (grading_mul r μ) γ (Mlet α f).
+Proof.
+intros * Hα Hf.
+induction iΓ; cbn.
++ auto.
++ destruct μ as [μ μA]; cbn in *.
+  split.
+  - rewrite map_map.
+    apply IHiΓ; intros; apply Hf.
+  - destruct μA as [μA|]; cbn in *; [|constructor].
+    subst r.
+    unfold measure.
+    rewrite !map_bind, !map_map; cbn.
+    unfold map; rewrite !bind_assoc.
+    f_equal; apply funext; intros x; rewrite !bind_ret_l.
+    apply Hf.
+Qed.
+
+Lemma grading_add_intro : forall Γ (iΓ : iCtx Γ) (μ₁ μ₂ : grading iΓ) (γ : ctx_wit Γ) π₁ π₂ ,
+  μ₁ γ π₁ -> μ₂ γ π₂ -> (grading_add μ₁ μ₂) γ (π₁ ⊕ π₂).
+Proof.
+intros Γ iΓ; induction iΓ; intros μ₁ μ₂; cbn.
++ constructor.
++ cbn; intros * [H1 Hl1] [H2 Hl2]; cbn in *.
+  destruct μ₁ as [μ₁ r₁], μ₂ as [μ₂ r₂]; cbn in *; split.
+  - now apply IHiΓ.
+  - destruct r₁ as [r₁|], r₂ as [r₂|]; auto.
+    subst; apply measure_add.
+Qed.
+
+(** Graded terms are just terms that respect a grading. *)
+
+Record Trmᵍ {Γ} {iΓ} (μΓ : grading iΓ) (A : Typ Γ) := {
+  gtrm_trm : Trm Γ A;
+  gtrm_grd : Box (forall γ π, μΓ γ (gtrm_trm.(trm_bwd) γ π));
+}.
+
+Arguments gtrm_trm {_ _ _ _}.
+Arguments gtrm_grd {_ _ _ _}.
+
+Coercion gtrm_trm : Trmᵍ >-> Trm.
+
+(** Graded context extension. We annotate the backward component
+    with a proof that it uses its argument exactly r times. *)
+
+Definition extᵍ {Γ : Ctx} {iΓ} (μΓ : grading iΓ) (r : 𝔸) (A : Typ Γ) : grading (ictx_ext Γ A iΓ).
+Proof.
+refine (pair μΓ (Some r)).
+Defined.
+
+(** Graded Π-type. *)
+
+Definition Πᵍ {Γ : Ctx} (r : 𝔸) (A : Typ Γ) (B : Typ (ext Γ A)) : Typ Γ.
+Proof.
+unshelve econstructor.
++ unshelve refine (fun γ =>
+    forall (x : typ_wit A γ),
+      sig (typ_wit B (pair γ x)) (fun y =>
+        sig (typ_ctr B (pair γ x) y -> M (typ_ctr A γ x))
+          (fun φ => forall π, measure (φ π) = r)
+    )
+  ).
++ unshelve refine (fun γ f =>
+    sig (typ_wit A γ) (fun x => typ_ctr B (pair γ x) (f x).(fst))
+  ).
+Defined.
+
+Definition lamᵍ {Γ : Ctx} {iΓ} {μΓ : grading iΓ} {r : 𝔸} {A : Typ Γ} {B : Typ (ext Γ A)}
+  (t : Trmᵍ (extᵍ μΓ r A) B) : Trmᵍ μΓ (Πᵍ r A B).
+Proof.
+unshelve econstructor; [unshelve econstructor|].
++ unshelve refine (fun γ x => pair (t.(trm_fwd) (pair γ x)) _).
+  unshelve refine (pair (fun π => snd (t.(trm_bwd) (pair γ x) π)) _).
+  refine (fun π => proj2 ((unbox t.(gtrm_grd) (pair γ x) π))).
++ cbn.
+  refine (fun γ π => fst (t.(trm_bwd) (pair γ π.(fst)) π.(snd))).
++ cbn; constructor.
+  refine (fun γ π => proj1 (unbox t.(gtrm_grd) (pair γ π.(fst)) π.(snd))).
+Defined.
+
+Definition appᵍ {Γ : Ctx} {iΓ} {μΓt μΓu : grading iΓ} {r : 𝔸} {A : Typ Γ} {B : Typ (ext Γ A)}
+  (t : Trmᵍ μΓt (Πᵍ r A B))
+  (u : Trmᵍ μΓu A) : Trmᵍ (grading_add μΓt (grading_mul r μΓu)) (typ_sub B (cns (idn Γ) u)).
+Proof.
+unshelve econstructor; [unshelve econstructor|].
++ refine (fun γ => (t.(trm_fwd) γ (u.(trm_fwd) γ)).(fst)).
++ refine (fun γ π => _ ⊕ _).
+  - refine (t.(trm_bwd) γ (pair (u.(trm_fwd) γ) π)).
+  - refine (Mlet ((t.(trm_fwd) γ (u.(trm_fwd) γ)).(snd).(fst) π) (u.(trm_bwd) γ)).
++ cbn; constructor; intros γ π.
+  destruct t as [t μt], u as [u μu]; cbn in *.
+  apply unbox in μt, μu.
+  apply grading_add_intro.
+  - apply μt.
+  - apply grading_mul_intro.
+    * apply (t.(trm_fwd) γ (u.(trm_fwd) γ)).(snd).(snd).
+    * apply μu.
+Defined.
