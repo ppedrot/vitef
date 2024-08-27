@@ -60,10 +60,13 @@ some magic in the target theory.
 
 *)
 
+Set Universe Polymorphism.
+Set Polymorphic Inductive Cumulativity.
+
 (** For simplicity, we turn Coq into a degraded topos, assuming funext and blurring
   the lines between Prop and SProp. *)
 
-Inductive Box (A : Type) : SProp := box : A -> Box A.
+Inductive Box@{i} (A : Type@{i}) : SProp := box : A -> Box A.
 
 Axiom funext : forall (A : Type) (B : A -> Type) (f g : forall x : A, B x),
   (forall x, f x = g x) -> f = g.
@@ -101,7 +104,7 @@ Qed.
 
 (** We axiomatize our abstract multiset structure. It is a monad. *)
 
-Axiom M : Type -> Type.
+Axiom M@{i} : Type@{i} -> Type@{i}.
 Axiom ret : forall {A : Type}, A -> M A.
 Axiom bind : forall {A B : Type}, M A -> (A -> M B) -> M B.
 
@@ -173,7 +176,7 @@ Record isAlg (A : Type) (hA : M A -> A) (nulA : A) (addA : A -> A -> A) := {
   alg_run_add : forall x y, hA (add x y) = addA (hA x) (hA y);
 }.
 
-Class Alg (A : Type) := {
+Class Alg@{i} (A : Type@{i}) := {
   alg_fun : M A -> A;
   alg_nul : A;
   alg_add : A -> A -> A;
@@ -356,9 +359,9 @@ Qed.
   get the algebra structure for free in context extension. Basically,
   this is a manifestation of a CBPV adjunction in call-by-name. *)
 
-Record Ctx := {
-  ctx_wit : Type;
-  ctx_ctr : forall (γ : ctx_wit), Type;
+Record Ctx@{i} := {
+  ctx_wit : Type@{i};
+  ctx_ctr : forall (γ : ctx_wit), Type@{i};
   ctx_alg :: forall (γ : ctx_wit), Alg (ctx_ctr γ);
 }.
 
@@ -439,9 +442,9 @@ Defined.
     [Γ, A] as [Γ], U [A]. The U functor is here the free M-algebra
     functor. *)
 
-Record Typ (Γ : Ctx) := {
-  typ_wit : forall (γ : Γ.(ctx_wit)), Type;
-  typ_ctr : forall (γ : Γ.(ctx_wit)) (x : typ_wit γ), Type;
+Record Typ@{i j k} (Γ : Ctx@{i}) := {
+  typ_wit : forall (γ : Γ.(ctx_wit)), Type@{j};
+  typ_ctr : forall (γ : Γ.(ctx_wit)) (x : typ_wit γ), Type@{k};
 }.
 
 Arguments typ_wit {Γ}.
@@ -929,6 +932,59 @@ Lemma elim_Sum_inr : forall Γ A B P pl pr t,
   @elim_Sum Γ A B P pl pr (inr A B t) = trm_sub pr (cns (idn _) t).
 Proof.
 reflexivity.
+Qed.
+
+(** Universe.
+
+  We simply store the W and C components of the type to code as a
+  dependent pair, i.e.
+
+  W(Type) := { W_A : Type; C_A : W_A → Type }.
+
+  By contrast, we hardwire that codes do not use their arguments
+  computationally by setting
+
+  C(Type)[(W_A, C_A)] := False.
+
+  As a result the backward component of a code is always trivial,
+  at least extensionally so.
+
+ *)
+
+Definition Unv {Γ : Ctx} : Typ Γ.
+Proof.
+unshelve econstructor.
++ refine (fun γ => sig Type (fun A => A -> Type)).
++ refine (fun γ π => False).
+Defined.
+
+Definition Elt {Γ} (A : Trm Γ Unv) : Typ Γ.
+Proof.
+unshelve econstructor.
++ refine (fun γ => (A.(trm_fwd) γ).(fst)).
++ refine (fun γ => (A.(trm_fwd) γ).(snd)).
+Defined.
+
+Definition Rpr {Γ} (A : Typ Γ) : Trm Γ Unv.
+Proof.
+unshelve econstructor.
++ refine (fun γ => pair (A.(typ_wit) γ) (A.(typ_ctr) γ)).
++ intros _ [].
+Defined.
+
+(** This is a Coquand universe, i.e. the above functions form
+    an isomorphism. One side is even definitional. *)
+
+Lemma Elt_Rpr_eqn : forall Γ (A : Typ Γ), Elt (Rpr A) = A.
+Proof.
+reflexivity.
+Qed.
+
+Lemma Rpr_Elt_eqn : forall Γ (A : Trm Γ Unv), Rpr (Elt A) = A.
+Proof.
+intros; unshelve eapply trm_eq_intro.
++ reflexivity.
++ cbn; intros γ [].
 Qed.
 
 (** Effects *)
