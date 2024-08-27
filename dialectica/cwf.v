@@ -934,6 +934,112 @@ Proof.
 reflexivity.
 Qed.
 
+(** Equality *)
+
+Definition Idn {Γ : Ctx} {A : Typ Γ} (t u : Trm Γ A) : Typ Γ.
+Proof.
+unshelve econstructor.
++ refine (fun γ => t.(trm_fwd) γ = u.(trm_fwd) γ).
++ refine (fun γ π => unit).
+Defined.
+
+Definition rfl {Γ : Ctx} {A : Typ Γ} (t : Trm Γ A) : Trm Γ (Idn t t).
+Proof.
+unshelve econstructor.
++ refine (fun γ => eq_refl).
++ refine (fun γ π => ∅).
+Defined.
+
+Definition elim_Idn {Γ : Ctx} {A : Typ Γ} {t : Trm Γ A}
+  (P : Typ (ext (ext Γ A) (Idn (trm_sub t (wkn A (idn _))) rel0)))
+  (p :
+    Trm Γ
+       (@typ_sub
+          (ext (ext Γ A)
+             (@Idn (ext Γ A) (@typ_sub Γ (ext Γ A) A (@wkn Γ Γ A (idn Γ)))
+                (@trm_sub Γ (ext Γ A) A t (@wkn Γ Γ A (idn Γ))) (@rel0 Γ A)))
+          Γ P
+          (@cns (ext Γ A) Γ
+             (@Idn (ext Γ A) (@typ_sub Γ (ext Γ A) A (@wkn Γ Γ A (idn Γ)))
+                (@trm_sub Γ (ext Γ A) A t (@wkn Γ Γ A (idn Γ))) (@rel0 Γ A))
+             (@cns Γ Γ A (idn Γ) t) (@rfl Γ A t)))
+  )
+  (u : Trm Γ A)
+  (e : Trm Γ (Idn t u))
+  :
+   Trm Γ
+   (@typ_sub
+      (ext (ext Γ A)
+         (@Idn (ext Γ A) (@typ_sub Γ (ext Γ A) A (@wkn Γ Γ A (idn Γ)))
+            (@trm_sub Γ (ext Γ A) A t (@wkn Γ Γ A (idn Γ))) (@rel0 Γ A)))
+      Γ P
+      (@cns (ext Γ A) Γ
+         (@Idn (ext Γ A) (@typ_sub Γ (ext Γ A) A (@wkn Γ Γ A (idn Γ)))
+            (@trm_sub Γ (ext Γ A) A t (@wkn Γ Γ A (idn Γ))) (@rel0 Γ A))
+         (@cns Γ Γ A (idn Γ) u) e)).
+Proof.
+unshelve econstructor.
++ cbn.
+  refine (fun γ =>
+    match e.(trm_fwd) γ as e₀ in _ = z return typ_wit P (pair (pair γ z) e₀)
+    with
+    | eq_refl => p.(trm_fwd) γ
+    end).
++ cbn.
+  refine (fun γ =>
+    match e.(trm_fwd) γ as e₀ in _ = z return
+    typ_ctr P {| fst := {| fst := γ; snd := z |}; snd := e₀ |}
+      match
+        e₀ in (_ = z)
+        return (typ_wit P {| fst := {| fst := γ; snd := z |}; snd := e₀ |})
+      with
+      | eq_refl => trm_fwd p γ
+      end ->
+      ctx_ctr Γ γ
+    with
+    | eq_refl => fun π => p.(trm_bwd) γ π ⊕ e.(trm_bwd) _ tt
+    end
+  ).
+Defined.
+
+Lemma Idn_sub : forall Γ Δ A t u (σ : Sub Δ Γ),
+  typ_sub (@Idn Γ A t u) σ = Idn (trm_sub t σ) (trm_sub u σ).
+Proof.
+reflexivity.
+Qed.
+
+Lemma rfl_sub {Γ Δ : Ctx} {A : Typ Γ} (t : Trm Γ A) (σ : Sub Δ Γ) :
+  trm_sub (@rfl Γ A t) σ = rfl (trm_sub t σ).
+Proof.
+unshelve eapply trm_eq_intro.
++ reflexivity.
++ cbn; intros.
+  apply Sub_nul.
+Qed.
+
+Lemma elim_Idn_sub : forall Γ Δ A t P p u e (σ : Sub Δ Γ),
+  trm_sub (@elim_Idn Γ A t P p u e) σ =
+  @elim_Idn Δ (typ_sub A σ) (trm_sub t σ)
+    (typ_sub P (lft _ (lft _ σ))) (trm_sub p σ) (trm_sub u σ) (trm_sub e σ).
+Proof.
+intros.
+unshelve eapply trm_eq_intro.
++ reflexivity.
++ intros γ π; cbn in *.
+  set (e₀ := trm_fwd e (sub_fwd σ γ)) in *.
+  clearbody e₀; destruct e₀.
+  now rewrite Sub_add.
+Qed.
+
+Lemma elim_Idn_rfl : forall Γ A t P p,
+  @elim_Idn Γ A t P p t (@rfl _ _ _) = p.
+Proof.
+intros; unshelve eapply trm_eq_intro.
++ reflexivity.
++ intros γ π; cbn.
+  apply Alg_id_r.
+Qed.
+
 (** Universe.
 
   We simply store the W and C components of the type to code as a
