@@ -91,6 +91,14 @@ Qed.
 
 Definition prod (A B : Type) := sig A (fun _ => B).
 
+Lemma prod_eq_intro : forall (A : Type) (B : Type) (p q : prod A B),
+  fst p = fst q -> snd p = snd q -> p = q.
+Proof.
+intros * e1 e2.
+destruct p as [x y], q as [x' y']; cbn in *.
+now destruct e1, e2.
+Qed.
+
 (** We axiomatize our abstract multiset structure. It is a monad. *)
 
 Axiom M : Type -> Type.
@@ -256,6 +264,16 @@ unshelve econstructor.
     now rewrite bind_ret_l.
   - now rewrite bind_nul.
   - intros; now rewrite bind_add.
+Defined.
+
+Instance Alg_unit : Alg unit.
+Proof.
+unshelve econstructor.
++ refine (fun α => tt).
++ refine (tt).
++ refine (fun p q => tt).
++ do 2 constructor; try reflexivity.
+  intros []; reflexivity.
 Defined.
 
 Instance Alg_prod {A B} : Alg A -> Alg B -> Alg (prod A B).
@@ -492,6 +510,42 @@ Qed.
 Lemma trm_sub_cmp : forall Γ Δ Ξ (A : Typ Ξ) (x : Trm Ξ A) (σ : Sub Γ Δ) (τ : Sub Δ Ξ),
   trm_sub x (cmp σ τ) = trm_sub (trm_sub x τ) σ.
 Proof.
+reflexivity.
+Qed.
+
+(** We now have all the necessary infrastructure. The rest of the file is dedicated
+    to the definition of various formers for contexts, types and terms. *)
+
+(** The empty context. *)
+
+Definition eps : Ctx.
+Proof.
+unshelve econstructor.
++ refine unit.
++ refine (fun _ => unit).
++ intros; apply Alg_unit.
+Defined.
+
+Definition drp (Γ : Ctx) : Sub Γ eps.
+Proof.
+unshelve econstructor.
++ refine (fun γ => tt).
++ refine (fun γ π => ∅).
++ do 2 constructor.
+  cbn; intros γ π.
+  symmetry; apply Mlet_nul.
+Defined.
+
+Lemma drp_eta : forall Γ (σ : Sub Γ eps), σ = drp Γ.
+Proof.
+intros Γ [σf σb σa]; unfold drp.
+assert (e : (fun _ => tt) = σf); [|destruct e].
+{ apply funext; intros; now destruct σf. }
+assert (e : (fun γ π => ∅) = σb); [|destruct e].
+{ apply funext; intros γ; apply funext; intros [].
+  apply unbox in σa; destruct σa as [σa]; cbn in *.
+  symmetry; etransitivity; [apply (σa γ (nul _))|].
+  unfold map; now rewrite bind_nul, Alg_run_nul. }
 reflexivity.
 Qed.
 
@@ -875,4 +929,86 @@ Lemma elim_Sum_inr : forall Γ A B P pl pr t,
   @elim_Sum Γ A B P pl pr (inr A B t) = trm_sub pr (cns (idn _) t).
 Proof.
 reflexivity.
+Qed.
+
+(** Effects *)
+
+(** The type Pack is basically a unary sum type. It embodies the
+    implicit ambient CBPV comonad. *)
+
+Definition Pack {Γ : Ctx} (A : Typ Γ) : Typ Γ.
+Proof.
+unshelve econstructor.
++ refine (fun γ => A.(typ_wit) γ).
++ refine (fun γ π => M (A.(typ_ctr) γ π)).
+Defined.
+
+Definition pack {Γ : Ctx} {A : Typ Γ} (t : Trm Γ A) : Trm Γ (Pack A).
+Proof.
+unshelve econstructor.
++ refine (fun γ => t.(trm_fwd) γ).
++ refine (fun γ π => Mlet π (t.(trm_bwd) γ)).
+Defined.
+
+Definition elim_Pack {Γ : Ctx} {A : Typ Γ} {B : Typ (ext Γ (Pack A))}
+  (t : Trm Γ (Pack A))
+  (u : Trm (ext Γ A) (typ_sub B (cns (A := Pack _) (wkn _ (idn _)) (pack rel0))))
+  : Trm Γ (typ_sub B (cns (A := Pack A) (idn Γ) t)).
+Proof.
+unshelve econstructor.
++ refine (fun γ => u.(trm_fwd) (pair γ (t.(trm_fwd) γ))).
++ cbn. refine (fun γ π => _ ⊕ _).
+  - refine (fst (u.(trm_bwd) (pair γ _) π)).
+  - refine (t.(trm_bwd) γ _).
+    refine (snd (u.(trm_bwd) (pair γ _) π)).
+Defined.
+
+Definition unpack {Γ : Ctx} {A B : Typ Γ}
+  (t : Trm Γ (Pack A)) (u : Trm (ext Γ A) (typ_sub B (wkn _ (idn _)))) : Trm Γ B :=
+  @elim_Pack Γ A (typ_sub B (wkn _ (idn _))) t u.
+
+Lemma elim_Pack_pack : forall Γ A B t u,
+  (@elim_Pack Γ A B (pack t) u) = trm_sub u (cns (idn _) t).
+Proof.
+reflexivity.
+Qed.
+
+(** A term x : A ⊢ t : B is linear in x whenever
+
+    x₀ : Pack A ⊢ (let x := (let pack x := x₀ in x) in t) = (let pack x := x₀ in t)
+
+    Surprisingly not all terms are linear in general, despite the fact
+    that Pack has an induction principle stating that internally all
+    terms of type Pack are introduced by a pack constructor.
+
+*)
+
+Definition linear {Γ : Ctx} {A B : Typ Γ} (t : Trm (ext Γ A) (typ_sub B (wkn _ (idn _)))) : Prop.
+Proof.
+refine (
+  @trm_sub (ext Γ A) (ext Γ (Pack A)) _ t (cns (wkn _ (idn _))
+    (@unpack (ext Γ (Pack A)) (typ_sub A _) _ rel0 rel0)) =
+  @unpack (ext Γ (Pack A)) (typ_sub A _) _ rel0 _
+).
+refine (trm_sub t (lft _ (wkn _ (idn _)))).
+Defined.
+
+Lemma linear_intro : forall {Γ : Ctx} {A B : Typ Γ} (t : Trm (ext Γ A) (typ_sub B _)),
+  (forall γ x π,
+    map ret (snd (trm_bwd t (pair γ x) π)) = ret (snd (trm_bwd t (pair γ x) π))) ->
+  linear t.
+Proof.
+intros * H; unshelve eapply trm_eq_intro.
++ reflexivity.
++ intros [γ x] π; cbn in *.
+  apply prod_eq_intro; cbn.
+  - rewrite map_map; f_equal; cbn.
+    rewrite Alg_id_l; apply Mlet_nul.
+  - rewrite !add_id_l, map_map; cbn.
+    unfold map; rewrite !bind_assoc.
+    match goal with [ |- bind _ ?f = _ ] => assert (e : f = (fun π => ret (ret π))) end.
+    { clear; apply funext; intros π.
+      now rewrite bind_ret_l, add_id_l. }
+    rewrite e; clear e.
+    apply H.
 Qed.
