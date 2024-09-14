@@ -1237,6 +1237,21 @@ apply funext; intros ρ.
 now rewrite bind_ret_l, add_id_l.
 Qed.
 
+(** Internalizing linear arrows. We can define an internal predicate that captures
+    functions which are actually linear. *)
+
+Definition Lin {Γ} {A : Typ Γ} {B : Typ (ext Γ A)} : Typ (ext Γ (Π A B)).
+Proof.
+unshelve econstructor.
++ cbn.
+  refine (fun γ => _).
+  refine (
+    let t x π := (γ.(snd) x).(snd) π in
+      forall x π, map ret (t x π) = ret (t x π)
+  ).
++ refine (fun γ _ => unit). (* don't care about counters *)
+Defined.
+
 (** We can generalize linearity by considering functions using their
     argument α times where α ∈ 𝔸, the ambient semiring of the model
     defined as 𝔸 := M 1. Linear functions are then functions using
