@@ -1166,9 +1166,22 @@ unshelve econstructor.
     refine (snd (u.(trm_bwd) (pair γ _) π)).
 Defined.
 
-Definition unpack {Γ : Ctx} {A B : Typ Γ}
-  (t : Trm Γ (Pack A)) (u : Trm (ext Γ A) (typ_sub B (wkn _ (idn _)))) : Trm Γ B :=
-  @elim_Pack Γ A (typ_sub B (wkn _ (idn _))) t u.
+Definition unpack₀ {Γ : Ctx} {A : Typ Γ}
+  (t : Trm Γ (Pack A)) : Trm Γ A :=
+  @elim_Pack Γ A (typ_sub A (wkn _ _)) t rel0.
+
+Definition unpack {Γ : Ctx} {A : Typ Γ} {B : Typ (ext Γ A)}
+  (t : Trm Γ (Pack A))
+  (u : Trm (ext Γ A) B) : Trm Γ (typ_sub B (cns (idn Γ) (unpack₀ t))).
+Proof.
+unshelve refine (let σ : Sub (ext Γ (Pack A)) (ext Γ A) := _ in _).
+{
+  unshelve refine (cns (wkn _ (idn _)) (unpack₀ _)).
+  refine rel0.
+}
+
+unshelve refine (@elim_Pack Γ A (typ_sub B σ) t u).
+Defined.
 
 Lemma elim_Pack_pack : forall Γ A B t u,
   (@elim_Pack Γ A B (pack t) u) = trm_sub u (cns (idn _) t).
@@ -1186,8 +1199,17 @@ Qed.
 
 *)
 
-Definition linear {Γ : Ctx} {A B : Typ Γ} (t : Trm (ext Γ A) (typ_sub B (wkn _ (idn _)))) : Prop.
+Definition linear {Γ : Ctx} {A : Typ Γ} {B : Typ (ext Γ A)} (t : Trm (ext Γ A) B) : Prop.
 Proof.
+refine (
+  @trm_sub (ext Γ A) (ext Γ (Pack A)) _ t (cns (wkn _ (idn _))
+    (@unpack (ext Γ (Pack A)) (typ_sub A _) _ rel0 rel0)) =
+  _
+).
+refine (
+  @unpack (ext Γ (Pack A)) _ _ _ _
+).
+
 refine (
   @trm_sub (ext Γ A) (ext Γ (Pack A)) _ t (cns (wkn _ (idn _))
     (@unpack (ext Γ (Pack A)) (typ_sub A _) _ rel0 rel0)) =

@@ -195,6 +195,11 @@ eapply unbox, dcpo_irfl; [apply dcpo_spc| |].
 + apply monotonous_sup_le.
 Qed.
 
+Lemma dcpo_arr_monotonous : forall {A B : dcpo} (f : arr_car A B), monotonous (dcpo_rel A) (dcpo_rel B) f.
+Proof.
+intros; apply cont_mono, arr_spc.
+Qed.
+
 Definition arr_rel {A B : dcpo} (f g : arr_car A B) := forall x : A, dcpo_rel B (f x) (g x).
 
 Definition aprel {A B} (D : arr_car A B -> SProp) (x : A) : B -> SProp := maprel D (fun f => f x).
@@ -327,16 +332,53 @@ intros A B; split.
       now apply (Hxy (pair x' y')).
 Qed.
 
+Program Definition Ω : dcpo := Build_dcpo SProp (fun A B => A -> B) (fun D d => Box (subset SProp (fun P => and P (D P)))) _.
+Next Obligation.
+split.
++ intros; auto.
++ intros; auto.
++ admit.
++ intros D d; split.
+  - intros P HP p.
+    constructor; now exists P.
+  - intros P HP [[Q [HQ]]].
+    eapply HP; eassumption.
+
+
+
+
+Definition open (A : dpco) (U : A -> SProp) : SProp :=
+  forall D (d : directed (dcpo_rel D) D), iff (U (dcpo_sup D d)) ()
+
+Lemma continuous_alt : forall {A B : dcpo} (f : A -> B),
+  iff (continuous f) (continuous f).
+
 Program Definition Lam {A B C : dcpo} (f : Arr (Prd A B) C) : Arr A (Arr B C) :=
   {| arr_fun := fun x => {| arr_fun := fun y => f (pair x y) |} |}.
 Next Obligation.
 intros; unshelve econstructor.
 + intros y1 y2 Hy.
-  apply cont_mono; [apply arr_spc|].
+  apply dcpo_arr_monotonous.
   constructor; cbn; [|assumption].
   eapply dcpo_refl, A.
 + intros DB db.
-  apply dcpo_sup_intro.
-  constructor.
+  pose (D := fun (p : prod A B) => and (dcpo_rel A p.(fst) x) (DB p.(snd))).
+  assert (d : directed (dcpo_rel (Prd A B)) D).
+  { intros [x1 y1] [x2 y2] [? d1] [? d2]; cbn in *.
+    destruct (db y1 y2 d1 d2) as [[y [Hy]]].
+    constructor; exists (pair x y); repeat constructor; cbn; first [apply Hy|assumption|eapply dcpo_refl, A]. }
+  eapply dcpo_trns with (y := f (dcpo_sup (Prd A B) D d)); [apply C|..].
+  - apply dcpo_arr_monotonous.
+    constructor; cbn.
+    * apply dcpo_sup_intro; constructor.
+      destruct (classical (subset B DB)) as [[y Hy]|k].
+      { exists (pair x y); cbn; repeat constructor; cbn; try assumption.
+        eapply dcpo_refl, A. }
+      { exists (pair x (dcpo_bot B)); cbn; repeat constructor; cbn.
+        + eapply dcpo_refl, A.
+        + cbn.
+Abort.
 
+(* Program Definition App {A B C : dcpo} (f : Arr A (Arr B C)) : Arr A (Arr B C) := *)
+(*   {| arr_fun := fun x => {| arr_fun := fun y => f (pair x y) |} |}. *)
 
