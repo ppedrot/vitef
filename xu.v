@@ -1,3 +1,9 @@
+(** A Coq port of the Escardó-Xu proof that MLTT + the strong existence of a
+    modulus of continuity for functions of type (ℕ → ℕ) → ℕ is inconsistent.
+
+    The inconsistency of a Brouwerian continuity principle with the
+    Curry–Howard interpretation, Escardó and Xu, TLCA'15. *)
+
 Require Import Lia.
 
 Definition eqn {A : nat -> Type} (f g : forall n : nat, A n) (n : nat) :=
@@ -8,12 +14,13 @@ Definition continuous {A R} (f : (forall n : nat, A n) -> R) :=
 
 Section Paradox.
 
+Definition ω (n : nat) := 0.
 Variable continuity : forall (f : (nat -> nat) -> nat), continuous f.
 
-Definition modulus f := proj1_sig (continuity f (fun _ => 0)).
+Definition modulus f := proj1_sig (continuity f ω).
 
 Lemma modulus_spec : forall (f : (nat -> nat) -> nat),
-  forall α, eqn (fun _ => 0) α (modulus f) -> f (fun _ => 0) = f α.
+  forall α, eqn ω α (modulus f) -> f ω = f α.
 Proof.
 unfold modulus; intros f α H.
 destruct continuity as [n Hn]; cbn in *.
@@ -25,14 +32,14 @@ Definition m₀ : nat := modulus (fun α => 0).
 Definition diagonal (α : nat -> nat) : nat :=
   modulus (fun β => α (β m₀)).
 
-Lemma diagonal_spec : forall α, eqn (fun _ => 0) α (modulus diagonal) -> m₀ = diagonal α.
+Lemma diagonal_spec : forall α, eqn ω α (modulus diagonal) -> m₀ = diagonal α.
 Proof.
 intros α H.
-change m₀ with (diagonal (fun _ => 0)).
+change m₀ with (diagonal ω).
 apply modulus_spec, H.
 Qed.
 
-Lemma lemma2 : forall α β, eqn (fun _ => 0) α (diagonal β) -> β 0 = β (α m₀).
+Lemma lemma2 : forall α β, eqn ω α (diagonal β) -> β 0 = β (α m₀).
 Proof.
 cbn; intros α β H.
 apply (modulus_spec (fun γ => β (γ m₀))).
@@ -49,7 +56,7 @@ unfold β₀.
 rewrite Compare_dec.leb_correct; [reflexivity|lia].
 Qed.
 
-Lemma lemma4 : forall α, eqn (fun _ : nat => 0) α m₀ -> β₀ 0 = β₀ (α m₀).
+Lemma lemma4 : forall α, eqn ω α m₀ -> β₀ 0 = β₀ (α m₀).
 Proof.
 intros α H.
 apply lemma2.
