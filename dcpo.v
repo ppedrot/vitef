@@ -1,9 +1,11 @@
 Set Universe Polymorphism.
 Set Polymorphic Inductive Cumulativity.
+Unset Program Cases.
 
 Inductive Box@{i} (A : Type@{i}) : SProp := box : A -> Box A.
 Inductive Inj@{i} (A : SProp) : Type@{i} := inj : A -> Inj A.
 Inductive False : SProp :=.
+Inductive True : SProp := I.
 
 Axiom funext : forall (A : Type) (B : A -> Type) (f g : forall x : A, B x),
   (forall x, f x = g x) -> f = g.
@@ -63,6 +65,13 @@ Proof.
 intros.
 destruct (classical A) as [x|k]; [assumption|].
 exfalso; apply unbox; elim H; intros; constructor; auto.
+Qed.
+
+Lemma absurdum : forall A : SProp, ((A -> False) -> False) -> A.
+Proof.
+intros A.
+destruct (classical (subset unit (fun _ => A))) as [[]|k]; auto.
+intros k'; elim k'; intros x; elim k; now exists tt.
 Qed.
 
 (** End of prelude *)
@@ -196,6 +205,8 @@ intros; split.
     * destruct v; constructor.
 Qed.
 
+Definition ℕ := Flat nat.
+
 Lemma monotonous_sup_le : forall {A B : dcpo} D d (f : A -> B)
   (m : monotonous (dcpo_rel A) (dcpo_rel B) f),
   B.(dcpo_rel) (B.(dcpo_sup) (maprel D f) (directed_maprel m d)) (f (A.(dcpo_sup) D d)).
@@ -209,7 +220,7 @@ Qed.
 Record continuous {A B : dcpo} (f : A -> B) : SProp := {
   cont_mono : monotonous (dcpo_rel A) (dcpo_rel B) f;
   cont_sup : forall D (d : directed (dcpo_rel A) D),
-    subset A D ->
+    exist A D ->
     B.(dcpo_rel) (f (A.(dcpo_sup) D d)) (B.(dcpo_sup) (maprel D f) (directed_maprel cont_mono d));
 }.
 
@@ -226,7 +237,7 @@ Arguments arr_spc {_ _}.
 Coercion arr_fun : arr_car >-> Funclass.
 
 Lemma continuous_sup : forall {A B : dcpo} D d (f : arr_car A B),
-  subset A D ->
+  exist A D ->
   (f (A.(dcpo_sup) D d)) = (B.(dcpo_sup) (maprel D f) (directed_maprel f.(arr_spc).(cont_mono) d)).
 Proof.
 intros.
@@ -235,12 +246,32 @@ eapply unbox, dcpo_irfl; [apply dcpo_spc| |].
 + apply monotonous_sup_le.
 Qed.
 
+Lemma maprel_bind_l : forall {A B C} P (f : A -> B) (g : B -> C) (z : C),
+  iff (maprel (maprel P f) g z) (maprel P (fun x => g (f x)) z).
+Proof.
+intros; split.
++ intros [y ? Hy]; subst.
+  destruct Hy as [x ? Hx]; subst.
+  now exists x.
++ intros [x ? ?]; subst.
+  exists (f x); [reflexivity|].
+  exists x; auto using Inj.
+Qed.
+
 Lemma dcpo_arr_monotonous : forall {A B : dcpo} (f : arr_car A B), monotonous (dcpo_rel A) (dcpo_rel B) f.
 Proof.
 intros; apply cont_mono, arr_spc.
 Qed.
 
 Definition arr_rel {A B : dcpo} (f g : arr_car A B) := forall x : A, dcpo_rel B (f x) (g x).
+
+Lemma arr_rel_app : forall {A B : dcpo} (f g : arr_car A B) (x y : A),
+  arr_rel f g -> dcpo_rel A x y -> dcpo_rel B (f x) (g y).
+Proof.
+intros * Hfg Hxy; apply dcpo_transitivity with (f y).
++ now apply f.
++ apply Hfg.
+Qed.
 
 Definition aprel {A B} (D : arr_car A B -> SProp) (x : A) : B -> SProp := maprel D (fun f => f x).
 
@@ -277,6 +308,15 @@ apply dcpo_sup_elim; intros x Hx.
 now apply dcpo_sup_intro, H.
 Qed.
 
+Lemma directed_ext : forall A R (D1 D2 : A -> SProp),
+  directed R D1 -> (forall x, iff (D1 x) (D2 x)) -> directed R D2.
+Proof.
+intros A R D1 D2 H1 H x y Hx Hy.
+specialize (H1 x y); destruct H1 as [u []]; try now apply H.
+exists u; split; auto.
+now apply H.
+Qed.
+
 Lemma dcpo_sup_ext : forall (A : dcpo) D1 D2
   (d1 : directed (dcpo_rel A) D1) (d2 : directed (dcpo_rel A) D2),
   (forall x, iff (D1 x) (D2 x)) -> dcpo_sup A D1 d1 = dcpo_sup A D2 d2.
@@ -285,6 +325,30 @@ intros * H.
 apply unbox; eapply dcpo_irfl; [apply A|..].
 + apply dcpo_sup_monotonous; intros; now apply H.
 + apply dcpo_sup_monotonous; intros; now apply H.
+Qed.
+
+Lemma dcpo_sup_ext' : forall (A : dcpo) D1 D2
+  (d1 : directed (dcpo_rel A) D1)
+  (H : forall x, iff (D1 x) (D2 x)), dcpo_sup A D1 d1 = dcpo_sup A D2 (directed_ext _ _ _ _ d1 H).
+Proof.
+intros; now apply dcpo_sup_ext.
+Qed.
+
+Lemma continuous_comp : forall {A B C : dcpo} (f : A -> B) (g : B -> C),
+  continuous f -> continuous g -> continuous (fun x => g (f x)).
+Proof.
+intros * Hf Hg; unshelve econstructor.
++ intros x x' Hx; apply Hg, Hf, Hx.
++ intros D d xd.
+  pose (f0 := Build_arr_car _ _ f Hf).
+  pose (g0 := Build_arr_car _ _ g Hg).
+  change f with (arr_fun _ _ f0).
+  rewrite (continuous_sup D d f0); [|assumption].
+  change g with (arr_fun _ _ g0).
+  assert (yd : exist B (maprel D f0)).
+  { destruct xd as [x xd]; exists (f0 x); now apply maprel_intro. }
+  rewrite (continuous_sup _ _ g0); [|assumption].
+  apply dcpo_sup_monotonous; intros z; apply maprel_bind_l.
 Qed.
 
 Program Definition arr_sup {A B : dcpo} (D : arr_car A B -> SProp) (d : directed arr_rel D) :=
@@ -327,6 +391,8 @@ intros A B; split.
     destruct Hy as [h ? ?]; subst.
     now apply Hf.
 Qed.
+
+Notation "A → B" := (Arr A B) (at level 99, right associativity, B at level 200).
 
 Record prd_rel {A B : dcpo} (p q : prod A B) : SProp := {
   prdrel_fst : dcpo_rel A (fst p) (fst q);
@@ -372,6 +438,12 @@ intros A B; split.
       now apply (Hxy (pair x' y')).
 Qed.
 
+Program Definition Top : dcpo := Build_dcpo unit (fun _ _ => True) (fun _ _ => tt) _.
+Next Obligation.
+split; try now constructor.
++ intros [] [] _ _; repeat constructor.
+Qed.
+
 (*
 Program Definition Ω : dcpo := Build_dcpo SProp (fun A B => A -> B) (fun D d => Box (subset SProp (fun P => and P (D P)))) _.
 Next Obligation.
@@ -385,14 +457,8 @@ split.
   - intros P HP [[Q [HQ]]].
     eapply HP; eassumption.
 
-
-
-
 Definition open (A : dpco) (U : A -> SProp) : SProp :=
   forall D (d : directed (dcpo_rel D) D), iff (U (dcpo_sup D d)) ()
-
-Lemma continuous_alt : forall {A B : dcpo} (f : A -> B),
-  iff (continuous f) (continuous f).
 *)
 
 Program Definition Lam {A B C : dcpo} (f : Arr (Prd A B) C) : Arr A (Arr B C) :=
@@ -430,21 +496,52 @@ intros; unshelve econstructor.
         constructor; cbn; auto using Box. }
 Qed.
 
+Next Obligation.
+intros; unshelve econstructor.
++ intros x1 x2 Hx y; cbn.
+  apply dcpo_arr_monotonous.
+  constructor; cbn; [assumption|].
+  eapply dcpo_refl, B.
++ intros DA da xd y; cbn.
+  pose (D := fun (p : prod A B) => and (DA p.(fst)) (Box (p.(snd) = y))).
+  assert (d : directed (dcpo_rel (Prd A B)) D).
+  { intros [x1 y1] [x2 y2] [d1 []] [d2 []]; cbn in *; subst y1 y2.
+    destruct (da x1 x2 d1 d2) as [x [Hx]].
+    exists (pair x y); repeat constructor; cbn; first [apply Hx|assumption|eapply dcpo_refl, B]. }
+  let t := match goal with [ |- dcpo_rel _ (_ ?t) _ ] => t end in
+  replace t with (dcpo_sup (Prd A B) D d).
+  - rewrite continuous_sup.
+    apply dcpo_refl_elim, dcpo_sup_ext; intros z; split.
+    * intros [[x0 y0] ? [? []]]; cbn in *; subst.
+      unfold aprel; apply maprel_bind_l; cbn.
+      now exists x0.
+    * intros [g -> [x ->]].
+      exists (pair x y); [reflexivity|].
+      split; auto using Box.
+    * destruct xd as [x xd].
+      now exists (pair x y).
+  - cbn; unfold prd_sup; f_equal.
+    * apply dcpo_sup_ext; intros x; split.
+      { intros [[x0 y0] ? [? ?]]; subst; cbn in *; assumption. }
+      { intros Hy; exists (pair x y); cbn; [reflexivity|].
+        constructor; cbn; auto using Box. }
+    * apply dcpo_refl_intro.
+      { apply dcpo_sup_elim; intros x' [[x0 y0] ? [? []]]; cbn in *; subst.
+        eapply dcpo_refl, B. }
+      { apply dcpo_sup_intro.
+        destruct xd as [xd Hxd]; now exists (pair xd y). }
+Qed.
+
 Lemma maprel_fun_ext : forall A B P f g y, (forall x, f x = g x) ->
   iff (@maprel A B P f y) (@maprel A B P g y).
 Proof.
 intros * H; apply funext in H; subst; apply iff_reflexivity.
 Qed.
 
-Lemma maprel_bind_l : forall {A B C} P (f : A -> B) (g : B -> C) (z : C), iff (maprel (maprel P f) g z) (maprel P (fun x => g (f x)) z).
+Lemma inhabited_maprel : forall {A B} {D : A -> SProp} {f : A -> B}, exist A D -> exist B (maprel D f).
 Proof.
-intros; split.
-+ intros [y ? Hy]; subst.
-  destruct Hy as [x ? Hx]; subst.
-  now exists x.
-+ intros [x ? ?]; subst.
-  exists (f x); [reflexivity|].
-  exists x; auto using Inj.
+intros * [x d]; exists (f x).
+now apply maprel_intro.
 Qed.
 
 Program Definition App {Γ A B : dcpo} (f : Arr Γ (Arr A B)) (x : Arr Γ A) : Arr Γ B :=
@@ -454,22 +551,99 @@ intros; unshelve econstructor.
 + intros γ1 γ2 Hγ.
   destruct f as [f [Hf Hfs]]; cbn in *; clear Hfs.
   assert (dcpo_rel A (x γ1) (x γ2)) by now apply x.
-  eapply dcpo_transitivity with (y := (f γ1 (x γ2))).
-  - now apply (f γ1).
+  apply arr_rel_app.
   - now apply Hf.
+  - now apply x.
 + intros D d xd.
   repeat (rewrite continuous_sup; [|assumption]); cbn; unfold aprel; cbn.
-  apply dcpo_refl_elim.
-  apply dcpo_sup_ext; intros y.
-  eapply iff_transitivity; [apply maprel_bind_l|]; cbn.
-  eapply iff_transitivity.
-  { apply maprel_fun_ext; intros γ.
-    rewrite continuous_sup; [|destruct xd as [γ0]; exists (x γ0); eexists; eauto using Inj].
-    apply dcpo_sup_ext, maprel_bind_l. }
-  split.
-  - intros [γ ? ?]; subst.
-    eexists γ.
-Abort.
+  let P := match goal with [ |- dcpo_rel _ (⊔ ?P) _ ] => P end in
+  unshelve erewrite dcpo_sup_ext' with (D1 := P) (D2 := maprel D (fun γ => _)) (H := maprel_bind_l _ _ _).
+  assert (Hm : forall γ : Γ, monotonous (dcpo_rel Γ) (dcpo_rel B) (fun γ' => f γ (x γ'))).
+  { intros γ γ' γ'' Hγ.
+    apply (dcpo_arr_monotonous (f γ)).
+    now apply (dcpo_arr_monotonous x). }
+  assert (dm : forall γ : Γ, directed (dcpo_rel B) (maprel D (fun γ' => f γ (x γ')))).
+  { intros; eapply directed_maprel; eauto. }
+  let q := match goal with [ |- context[ dcpo_sup _ (maprel D ?f) ?p ] ] => p end in
+  set (p := q); clearbody p.
+  let g := match goal with [ |- context[ dcpo_sup _ (maprel D ?f) _ ] ] => f end in
+  assert (Hrw : g = (fun γ : Γ => dcpo_sup _ (maprel D (fun γ' => f γ (x γ'))) (dm γ))).
+  { apply funext; intros γ.
+    rewrite continuous_sup with (f := f γ); [|now apply inhabited_maprel].
+    apply dcpo_sup_ext; intros y; split.
+    + intros [a -> [γ' ->]]; now exists γ'.
+    + intros [γ' ->].
+      exists (x γ'); [reflexivity|].
+      now exists γ'. }
+  revert p; rewrite Hrw; intros p; clear Hrw.
+  apply dcpo_sup_elim; intros y [γ -> ?].
+  apply dcpo_sup_elim; intros y' [γ' -> ?].
+  destruct (d γ γ') as [γ'' Hγ'']; try assumption.
+  apply dcpo_transitivity with (f γ (x γ'')).
+  { apply dcpo_arr_monotonous, dcpo_arr_monotonous, Hγ''. }
+  apply dcpo_transitivity with (f γ'' (x γ'')).
+  { apply (dcpo_arr_monotonous f), Hγ''. }
+  apply dcpo_sup_intro.
+  exists γ''; [reflexivity|apply Hγ''].
+Qed.
+
+Definition continuous_alt {A B : dcpo} (f : A -> B) :=
+  forall (V : Arr B (Flat unit)), @continuous A (Flat unit) (fun x => V (f x)).
+
+Program Definition cone {A : dcpo} (x : A) : Arr A (Flat unit) :=
+  {| arr_fun := fun y =>
+    match classical (subset unit (fun _ => dcpo_rel A y x)) with inl _ => None | inr _ => Some tt end |}.
+Next Obligation.
+intros A x₀; unshelve econstructor.
++ intros x x' Hx.
+  repeat destruct classical as [[]|]; try now constructor.
+  elim f; exists tt.
+  now apply dcpo_transitivity with x'.
++ intros D d xd.
+  assert (Hmin : forall x : Flat unit, dcpo_rel (Flat unit) None x).
+  { destruct x; constructor. }
+  assert (Hmax : forall x : Flat unit, dcpo_rel (Flat unit) x (Some tt)).
+  { destruct x as [[]|]; constructor. }
+  destruct classical as [[]|Hc]; [auto|].
+  apply dcpo_sup_intro, absurdum; intros Hk.
+  elim Hc; exists tt; apply dcpo_sup_elim.
+  intros x Hx; apply absurdum; intros Hk'; elim Hk.
+  exists x; [|assumption].
+  destruct classical as [[]|]; auto.
+  now elim Hk'.
+Qed.
+
+Lemma continuous_alt_monotonous : forall {A B : dcpo} (f : A -> B),
+  continuous_alt f -> monotonous (dcpo_rel A) (dcpo_rel B) f.
+Proof.
+intros A B f Hf x x' Hx.
+specialize (Hf (cone (f x'))).
+apply Hf in Hx; cbn in Hx.
+destruct classical as [[]|]; [auto|].
+destruct classical as [[]|Hk]; [inversion Hx|].
+elim Hk; exists tt; now apply dcpo_refl_elim.
+Qed.
+
+Lemma continuous_alt_equiv : forall {A B : dcpo} (f : A -> B),
+  iff (continuous f) (continuous_alt f).
+Proof.
+intros A B f; split; intros Hf.
++ intros V; apply continuous_comp; eauto.
+  apply arr_spc.
++ unshelve econstructor.
+  - now apply continuous_alt_monotonous.
+  - intros D d xd.
+    match goal with [ |- context [dcpo_sup B (maprel D f) ?p0] ] => set (db := p0) end; clearbody db.
+    specialize (Hf (cone (dcpo_sup _ _ db))).
+    destruct Hf as [Hfm Hfc].
+    specialize (Hfc D d xd); cbn in Hfc.
+    destruct classical as [[]|Hsup]; [assumption|].
+    unfold flat_sup in Hfc.
+    destruct classical as [[[] [[x Hx]]]|]; [|inversion Hfc]; cbn in Hfc.
+    destruct classical as [|Hdx]; [congruence|].
+    elim Hdx; constructor; [constructor|].
+    apply dcpo_sup_intro; now exists x.
+Qed.
 
 Inductive is_chain {A : dcpo} (f : A -> A) : A -> SProp :=
 | is_chain_bot : is_chain f (dcpo_bot A)
@@ -495,3 +669,74 @@ induction Hx.
     * now apply f.
     * now apply f.
 Qed.
+
+Lemma sup_chain_fix : forall {A : dcpo} (f : Arr A A),
+  f (dcpo_sup A _ (directed_chain f)) = dcpo_sup A _ (directed_chain f).
+Proof.
+intros A f.
+assert (exist A (fun x : A => is_chain f x)).
+{ exists (dcpo_bot _); constructor. }
+rewrite continuous_sup; [|assumption].
+apply dcpo_refl_intro.
++ apply dcpo_sup_elim; intros x [x' -> Hx].
+  apply dcpo_sup_intro; now constructor.
++ apply dcpo_sup_elim; intros x Hx.
+  destruct Hx; [apply dcpo_bot_spec|].
+  apply dcpo_sup_intro; now econstructor.
+Qed.
+
+Program Definition fixp {A : dcpo} : Arr (Arr A A) A :=
+  {| arr_fun := fun f => dcpo_sup A _ (directed_chain f) |}.
+Next Obligation.
+intros; unshelve econstructor.
++ intros f f' Hf.
+  apply dcpo_sup_elim; intros ω Hω.
+  assert (H : exist A (fun ω' => and (is_chain f' ω') (dcpo_rel A ω ω'))).
+  { induction Hω as [|ω]; cbn in *.
+    + exists (dcpo_bot _); split; [constructor|].
+      eapply dcpo_refl, A.
+    + destruct IHHω as [ω' [Hω' Hr]].
+      exists (f' ω'); split; [now constructor|].
+      apply dcpo_transitivity with (f ω').
+      - now apply dcpo_arr_monotonous.
+      - apply Hf. }
+  destruct H as [ω' [Hω' ?]].
+  apply dcpo_transitivity with ω'; [assumption|].
+  now apply dcpo_sup_intro.
++ intros Df df fd.
+  apply dcpo_sup_elim; intros ω Hω.
+  induction Hω as [|ω]; cbn.
+  - apply dcpo_bot_spec.
+  - apply dcpo_sup_elim; intros ? [f -> Hf].
+    apply (dcpo_arr_monotonous f) in IHHω.
+    assert (Hd : exist A (maprel Df (fun f : Arr A A => dcpo_sup A _ (directed_chain f)))).
+    { exists (f (dcpo_sup A _ (directed_chain f))).
+      exists f; [|assumption].
+      apply sup_chain_fix. }
+    rewrite continuous_sup in IHHω; [|assumption].
+    eapply dcpo_transitivity; [apply IHHω|].
+    apply dcpo_sup_elim; intros ? [? -> [g -> Hg]].
+    destruct (df f g Hf Hg) as [h [Hh ? ?]].
+    apply dcpo_transitivity with (h (dcpo_sup _ (fun x => is_chain h x) (directed_chain _))).
+    * apply arr_rel_app; [assumption|].
+      apply dcpo_sup_elim; intros x Hx.
+      induction Hx; [apply dcpo_bot_spec|].
+      rewrite <- sup_chain_fix.
+      now apply arr_rel_app.
+    * apply dcpo_sup_intro.
+      exists h; [|assumption].
+      apply sup_chain_fix.
+Qed.
+
+(*
+
+ur : ((ℕ → A + (A → ℕ)) → ℕ) → (ℕ → 1 + A) → ℕ
+ur φ α ≡ φ (fun n => match α n with Some x => inl x | None => inr (fun y => ur φ (α ⊕ ⟨n ↦ y⟩)))
+
+*)
+
+(*
+Program Definition barrec {A} : ((ℕ → A) → ℕ) → ℕ :=
+  {| arr_fun := fun f => _ |}.
+Next Obligation.
+*)
