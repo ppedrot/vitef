@@ -394,6 +394,11 @@ Qed.
 
 Notation "A → B" := (Arr A B) (at level 99, right associativity, B at level 200).
 
+Program Definition Comp {A B C} (f : A → B) (g : B → C) : A → C := {| arr_fun := fun x => g (f x) |}.
+Next Obligation.
+intros; apply continuous_comp; [apply f|apply g].
+Qed.
+
 Record prd_rel {A B : dcpo} (p q : prod A B) : SProp := {
   prdrel_fst : dcpo_rel A (fst p) (fst q);
   prdrel_snd : dcpo_rel B (snd p) (snd q);
@@ -436,6 +441,38 @@ intros A B; split.
       now apply (Hxy (pair x' y')).
     * apply dcpo_sup_elim; intros ? [[x' y'] ? ?]; subst; cbn.
       now apply (Hxy (pair x' y')).
+Qed.
+
+Program Definition Fst {A B : dcpo} : Prd A B → A := {| arr_fun := fun p => p.(fst) |}.
+Next Obligation.
+intros A B; unshelve econstructor.
++ intros [] [] H; cbn in *; apply H.
++ intros D d HD; cbn.
+  now apply dcpo_refl_elim.
+Qed.
+
+Program Definition Snd {A B : dcpo} : Prd A B → B := {| arr_fun := fun p => p.(snd) |}.
+Next Obligation.
+intros A B; unshelve econstructor.
++ intros [] [] H; cbn in *; apply H.
++ intros D d HD; cbn.
+  now apply dcpo_refl_elim.
+Qed.
+
+Program Definition Dup {Γ A B : dcpo} (f : Γ → A) (g : Γ → B) : Γ → Prd A B :=
+  Build_arr_car Γ (Prd A B) (fun γ => pair (f γ) (g γ)) _.
+Next Obligation.
+intros; unshelve econstructor.
++ intros γ γ' Hγ; split; cbn; [apply f|apply g]; assumption.
++ intros D d Hd; split; cbn.
+  - rewrite continuous_sup; [|assumption].
+    apply dcpo_sup_elim; intros ? [γ -> Hγ].
+    apply dcpo_sup_intro; exists (pair (f γ) (g γ)); [reflexivity|].
+    now exists γ.
+  - rewrite continuous_sup; [|assumption].
+    apply dcpo_sup_elim; intros ? [γ -> Hγ].
+    apply dcpo_sup_intro; exists (pair (f γ) (g γ)); [reflexivity|].
+    now exists γ.
 Qed.
 
 Program Definition Top : dcpo := Build_dcpo unit (fun _ _ => True) (fun _ _ => tt) _.
@@ -544,9 +581,8 @@ intros * [x d]; exists (f x).
 now apply maprel_intro.
 Qed.
 
-Program Definition App {Γ A B : dcpo} (f : Arr Γ (Arr A B)) (x : Arr Γ A) : Arr Γ B :=
-  {| arr_fun := fun γ => f γ (x γ) |}.
-Next Obligation.
+Lemma app_continuous : forall {Γ A B : dcpo} (f : Γ → A → B) (x : Γ → A), continuous (fun γ : Γ => f γ (x γ)).
+Proof.
 intros; unshelve econstructor.
 + intros γ1 γ2 Hγ.
   destruct f as [f [Hf Hfs]]; cbn in *; clear Hfs.
@@ -585,6 +621,12 @@ intros; unshelve econstructor.
   { apply (dcpo_arr_monotonous f), Hγ''. }
   apply dcpo_sup_intro.
   exists γ''; [reflexivity|apply Hγ''].
+Qed.
+
+Program Definition App {Γ A B : dcpo} (f : Arr Γ (Arr A B)) (x : Arr Γ A) : Arr Γ B :=
+  {| arr_fun := fun γ => f γ (x γ) |}.
+Next Obligation.
+intros; apply app_continuous.
 Qed.
 
 Definition continuous_alt {A B : dcpo} (f : A -> B) :=
@@ -685,7 +727,7 @@ apply dcpo_refl_intro.
   apply dcpo_sup_intro; now econstructor.
 Qed.
 
-Program Definition fixp {A : dcpo} : Arr (Arr A A) A :=
+Program Definition FixT {A : dcpo} : Arr (Arr A A) A :=
   {| arr_fun := fun f => dcpo_sup A _ (directed_chain f) |}.
 Next Obligation.
 intros; unshelve econstructor.
@@ -728,15 +770,369 @@ intros; unshelve econstructor.
       apply sup_chain_fix.
 Qed.
 
+Inductive sum_rel {A B} (RA : A -> A -> SProp) (RB : B -> B -> SProp) : option (A + B) -> option (A + B) -> SProp :=
+| sum_rel_bot : forall s, sum_rel RA RB None s
+| sum_rel_inl : forall x x', RA x x' -> sum_rel RA RB (Some (inl x)) (Some (inl x'))
+| sum_rel_inr : forall y y', RB y y' -> sum_rel RA RB (Some (inr y)) (Some (inr y')).
+
+Lemma directed_sum_inl : forall {A B RA RB} D,
+  directed (@sum_rel A B RA RB) D -> directed RA (fun x => D (Some (inl x))).
+Proof.
+intros * H.
+intros x x' Hx Hx'.
+destruct (H (Some (inl x)) (Some (inl x'))) as [o [Ho Hox Hox']]; try assumption.
+inversion Hox; subst; inversion Hox'; subst.
+match type of Ho with D (Some (inl ?z)) => exists z; now split end.
+Qed.
+
+Lemma directed_sum_inr : forall {A B RA RB} D,
+  directed (@sum_rel A B RA RB) D -> directed RB (fun y => D (Some (inr y))).
+Proof.
+intros * H.
+intros x x' Hx Hx'.
+destruct (H (Some (inr x)) (Some (inr x'))) as [o [Ho Hox Hox']]; try assumption.
+inversion Hox; subst; inversion Hox'; subst.
+match type of Ho with D (Some (inr ?z)) => exists z; now split end.
+Qed.
+
+Definition sum_sup {A B : dcpo} (D : option (A + B) -> SProp) (d : directed (sum_rel (dcpo_rel A) (dcpo_rel B)) D) : option (A + B) :=
+  match classical (subset A (fun x => D (Some (inl x)))) with
+  | inl _ => Some (inl (dcpo_sup A _ (directed_sum_inl D d)))
+  | inr _ =>
+    match classical (subset B (fun x => D (Some (inr x)))) with
+    | inl _ => Some (inr (dcpo_sup B _ (directed_sum_inr D d)))
+    | inr _ => None
+    end
+  end.
+
+Program Definition Sum (A B : dcpo) : dcpo := {|
+  dcpo_car := option (A + B);
+  dcpo_rel := sum_rel (dcpo_rel A) (dcpo_rel B);
+  dcpo_sup := sum_sup;
+|}.
+Next Obligation.
+intros; split.
++ intros [[]|]; constructor; now apply dcpo_refl_elim.
++ intros * Hl Hr; inversion Hl; subst; try now constructor.
+  - inversion Hr; subst; constructor.
+    eapply dcpo_transitivity; now eauto.
+  - inversion Hr; subst; constructor.
+    eapply dcpo_transitivity; now eauto.
++ intros * Hl Hr; inversion Hl; subst.
+  - inversion Hr; repeat constructor.
+  - inversion Hr; subst; constructor; repeat f_equal.
+    now apply dcpo_refl_intro.
+  - inversion Hr; subst; constructor; repeat f_equal.
+    now apply dcpo_refl_intro.
++ intros; split.
+  - intros p Hp; unfold sum_sup.
+    destruct classical as [[a Ha]|]; [|destruct classical as [[b Hb]|]].
+    * destruct p as [p|]; [|constructor].
+      pose proof (H := d _ _ Hp Ha).
+      destruct H as [m [Hm Hl Hr]].
+      inversion Hl; subst; inversion Hr; subst.
+      constructor; now apply dcpo_sup_intro.
+    * destruct p as [p|]; [|constructor].
+      pose proof (H := d _ _ Hp Hb).
+      destruct H as [m [Hm Hl Hr]].
+      inversion Hl; subst; inversion Hr; subst.
+      constructor; now apply dcpo_sup_intro.
+    * destruct p as [[a|b]|]; try constructor; exfalso; eauto using subset, sum_rel.
+  - intros p Hp; unfold sum_sup.
+    destruct classical as [[a Ha]|]; [|destruct classical as [[b Hb]|]].
+    * pose proof (H := Hp _ Ha); inversion H; subst.
+      constructor; apply dcpo_sup_elim; intros.
+      match goal with [ |- dcpo_rel A ?x ?y ] => enough (Hr : sum_rel (dcpo_rel A) (dcpo_rel B) (Some (inl x)) (Some (inl y))) by now inversion Hr end.
+      now apply Hp.
+    * pose proof (H := Hp _ Hb); inversion H; subst.
+      constructor; apply dcpo_sup_elim; intros.
+      match goal with [ |- dcpo_rel B ?x ?y ] => enough (Hr : sum_rel (dcpo_rel A) (dcpo_rel B) (Some (inr x)) (Some (inr y))) by now inversion Hr end.
+      now apply Hp.
+    * destruct p as [[a|b]|]; try constructor; exfalso; eauto using subset, sum_rel.
+Qed.
+
+(*
+Program Definition Sum_recT {A B C : dcpo} (ul : A → C) (ur : B → C) : Sum A B → C :=
+  {| arr_fun := fun s => match s with None => dcpo_bot _ | Some (inl x) => ul x | Some (inr y) => ur y end |}.
+Next Obligation.
+intros *; unshelve econstructor.
++ intros [[x|y]|] s Hs; inversion Hs; subst.
+  - now apply ul.
+  - now apply ur.
+  - apply dcpo_bot_spec.
++ intros D d Hd; cbn; unfold sum_sup.
+  destruct classical as [[x Hx]|kx]; [|destruct classical as [[y Hy]|ky]].
+  - rewrite continuous_sup; [|now eexists; eauto].
+    apply dcpo_sup_elim; intros ? [x' -> Hx'].
+    destruct (d _ _ Hx Hx') as [s [? Hl Hr]].
+    inversion Hr; subst.
+    eapply dcpo_transitivity; [apply ul; eauto|].
+    apply dcpo_sup_intro; eexists (Some (inl _)); [reflexivity|assumption].
+  - rewrite continuous_sup; [|now eexists; eauto].
+    apply dcpo_sup_elim; intros ? [y' -> Hy'].
+    destruct (d _ _ Hy Hy') as [s [? Hl Hr]].
+    inversion Hr; subst.
+    eapply dcpo_transitivity; [apply ur; eauto|].
+    apply dcpo_sup_intro; eexists (Some (inr _)); [reflexivity|assumption].
+  - apply dcpo_bot_spec.
+Qed.
+*)
+
+Program Definition Inl {Γ A B : dcpo} (x : Γ → A) : Γ → Sum A B :=
+  {| arr_fun := fun γ => Some (inl (x γ)) |}.
+Next Obligation.
+intros; unshelve econstructor.
++ intros γ γ' Hγ; constructor; now apply x.
++ intros D d Hd.
+  rewrite continuous_sup; [|assumption].
+  cbn; unfold sum_sup.
+  destruct classical as [[a [γ Ha]]|Ha]; [|destruct classical as [[b [γ Hb]]|Hb]].
+  - constructor.
+    apply dcpo_sup_elim; intros ? [γ' ->].
+    apply dcpo_sup_intro; now exists γ'.
+  - exfalso; congruence.
+  - destruct Hd as [γ Hγ].
+    elim Ha; exists (x γ); now exists γ.
+Qed.
+
+Program Definition Inr {Γ A B : dcpo} (y : Γ → B) : Γ → Sum A B :=
+  {| arr_fun := fun γ => Some (inr (y γ)) |}.
+Next Obligation.
+intros; unshelve econstructor.
++ intros γ γ' Hγ; constructor; now apply y.
++ intros D d Hd.
+  rewrite continuous_sup; [|assumption].
+  cbn; unfold sum_sup.
+  destruct classical as [[a [γ Ha]]|Ha]; [|destruct classical as [[b [γ Hb]]|Hb]].
+  - exfalso; congruence.
+  - constructor.
+    apply dcpo_sup_elim; intros ? [γ' ->].
+    apply dcpo_sup_intro; now exists γ'.
+  - destruct Hd as [γ Hγ].
+    elim Hb; exists (y γ); now exists γ.
+Qed.
+
+Program Definition Sum_rec {Γ A B C : dcpo}
+  (ul : Γ → A → C) (ur : Γ → B → C) (s : Γ → Sum A B) : Γ → C :=
+  {| arr_fun := fun γ => match s γ with None => dcpo_bot _ | Some (inl x) => ul γ x | Some (inr y) => ur γ y end |}.
+Next Obligation.
+intros *; unshelve econstructor.
++ intros γ γ' Hγ.
+  unshelve epose proof (Hs := arr_rel_app s s γ γ' _ Hγ).
+  { intros ?; now apply dcpo_refl_elim. }
+  remember (s γ) as p; destruct p as [[x|y]|]; inversion Hs; subst.
+  - apply arr_rel_app; [|assumption].
+    apply (@arr_rel_app _ (Arr _ _)); [|assumption].
+    intros ?; now apply dcpo_refl_elim.
+  - apply arr_rel_app; [|assumption].
+    apply (@arr_rel_app _ (Arr _ _)); [|assumption].
+    intros ?; now apply dcpo_refl_elim.
+  - apply dcpo_bot_spec.
++ intros D d Hd; cbn.
+  repeat (rewrite continuous_sup; [|assumption]).
+  cbn; unfold sum_sup.
+  destruct classical as [[x Hx]|kx]; [|destruct classical as [[y Hy]|ky]].
+  - apply dcpo_sup_elim; intros ? [f -> [γ -> Hγ]].
+    rewrite continuous_sup; [|now eexists; eauto].
+    apply dcpo_sup_elim; intros ? [x' -> [γ' Heq Hγ']].
+    destruct (d _ _ Hγ Hγ') as [γ'' [? Hl Hr]].
+    unshelve epose proof (Hs := arr_rel_app s s γ' γ'' _ Hr).
+    { intros ?; now apply dcpo_refl_elim. }
+    rewrite <- Heq in Hs; inversion Hs; subst.
+    match goal with [ H : Some (inl ?x) = _ γ'' |- _ ] => rename x into x'' end.
+    eapply dcpo_transitivity with (ul γ'' x'').
+    { apply arr_rel_app; [|assumption]; now apply ul. }
+    apply dcpo_sup_intro; exists γ''; [|assumption].
+    match goal with [ H : Some (inl ?x) = _ γ'' |- _ ] => now rewrite <- H end.
+  - apply dcpo_sup_elim; intros ? [f -> [γ -> Hγ]].
+    rewrite continuous_sup; [|now eexists; eauto].
+    apply dcpo_sup_elim; intros ? [y' -> [γ' Heq Hγ']].
+    destruct (d _ _ Hγ Hγ') as [γ'' [? Hl Hr]].
+    unshelve epose proof (Hs := arr_rel_app s s γ' γ'' _ Hr).
+    { intros ?; now apply dcpo_refl_elim. }
+    rewrite <- Heq in Hs; inversion Hs; subst.
+    match goal with [ H : Some (inr ?y) = _ γ'' |- _ ] => rename y into y'' end.
+    eapply dcpo_transitivity with (ur γ'' y'').
+    { apply arr_rel_app; [|assumption]; now apply ur. }
+    apply dcpo_sup_intro; exists γ''; [|assumption].
+    match goal with [ H : Some (inr ?x) = _ γ'' |- _ ] => now rewrite <- H end.
+  - apply dcpo_bot_spec.
+Qed.
+
+Program Definition Fix {Γ A : dcpo} (f : Γ → A → A) : Γ → A :=
+  {| arr_fun := fun γ => FixT (f γ) |}.
+Next Obligation.
+intros; apply continuous_comp.
++ apply f.
++ apply FixT.
+Qed.
+
+Program Definition Let {Γ A : dcpo} {X : Type} (v : Γ → Flat X) (f : X -> Γ → A) : Γ → A :=
+  App (Lam {| arr_fun := fun (γ : Prd Γ (Flat X))  => match snd γ with None => dcpo_bot _ | Some x => f x (fst γ) end |}) v.
+Next Obligation.
+intros; unshelve econstructor.
++ intros [γ x] [γ' x'] [Hγ Hx].
+  destruct x as [x|]; [|apply dcpo_bot_spec].
+  cbn [fst snd] in *.
+  destruct x' as [x'|]; [|now inversion Hx].
+  assert (Heq : x = x'); [|subst x'].
+  { apply unbox; inversion Hx; repeat constructor. }
+  now apply f.
++ intros D d Hd; cbn; unfold flat_sup.
+  destruct classical as [[? [[[γ x] Heq]]]|Hx]; cbn in *; [|apply dcpo_bot_spec].
+  destruct x as [x|]; [|congruence].
+  injection Heq; intros ->.
+  assert (exist Γ (maprel D fst)).
+  { exists γ; now exists (pair γ (Some x)). }
+  rewrite continuous_sup; [|assumption].
+  apply dcpo_sup_elim; intros ? [? -> [[γ' x'] ->]]; cbn.
+  edestruct (d (pair γ (Some x)) (pair γ' x')) as [[γ'' x''] [? [? Hl] []]]; try assumption; cbn in *.
+  destruct x'' as [x''|]; [|now inversion Hl].
+  assert (Hrw : x = x''); [|subst x''].
+  { apply unbox; inversion Hl; subst; repeat constructor. }
+  apply dcpo_transitivity with (f x γ''); [now apply f|].
+  apply dcpo_sup_intro; exists (pair γ'' (Some x)); [|assumption].
+  reflexivity.
+Qed.
+
+(* upd (s : ℕ → 1 + A) (n : ℕ) (v : A) : ℕ → 1 + A := fun m => if m == n then Some v else s m *)
+
+Definition Upd {Γ A : dcpo} (s : Γ → ℕ → Sum Top A) (n : Γ → ℕ) (v : Γ → A) : Γ → ℕ → Sum Top A :=
+  Lam (Let (Comp Fst n) (fun n₀ => Let Snd (fun m₀ => if Nat.eqb m₀ n₀ then Inr (Comp Fst v) else App (Comp Fst s) Snd))).
+
 (*
 
 ur : ((ℕ → A + (A → ℕ)) → ℕ) → (ℕ → 1 + A) → ℕ
-ur φ α ≡ φ (fun n => match α n with Some x => inl x | None => inr (fun y => ur φ (α ⊕ ⟨n ↦ y⟩)))
+ur φ α ≡ φ (fun n => match α n with None => inl (fun y => ur φ (α ⊕ ⟨n ↦ y⟩)) | Some x => inr x end)
 
 *)
 
-(*
-Program Definition barrec {A} : ((ℕ → A) → ℕ) → ℕ :=
-  {| arr_fun := fun f => _ |}.
+Definition barrec {Γ A : dcpo} : Γ → ((ℕ → Sum A (A → ℕ)) → ℕ) → (ℕ → Sum Top A) → ℕ.
+Proof.
+refine (Lam (Fix (Lam (Lam (App (Comp Fst (Comp Fst Snd)) (Lam _)))))).
+refine (Sum_rec (Lam (Inr _)) (Lam (Inl Snd)) (App (Comp Fst Snd) Snd)).
+refine (Lam (App (Comp Fst (Comp Fst (Comp Fst (Comp Fst Snd)))) _)).
+refine (Upd (Comp Fst (Comp Fst (Comp Fst Snd))) (Comp Fst (Comp Fst Snd)) Snd).
+Defined.
+
+(** Proof of totality *)
+
+Inductive typ :=
+| Tflat : Type -> typ
+| Tarr : typ -> typ -> typ
+| Ttop : typ
+| Tprd : typ -> typ -> typ
+| Tsum : typ -> typ -> typ.
+
+Fixpoint Teval (σ : typ) : dcpo :=
+match σ with
+| Tflat A => Flat A
+| Tarr σ τ => Arr (Teval σ) (Teval τ)
+| Ttop => Top
+| Tprd σ τ => Prd (Teval σ) (Teval τ)
+| Tsum σ τ => Sum (Teval σ) (Teval τ)
+end.
+
+Inductive flat_tot {A} : Flat A -> SProp :=
+| flat_tot_Some : forall x, flat_tot (Some x).
+
+Inductive sum_tot {A B : dcpo} (TA : A -> SProp) (TB : B -> SProp) : Sum A B -> SProp :=
+| sum_tot_inl : forall x, TA x -> sum_tot TA TB (Some (inl x))
+| sum_tot_inr : forall y, TB y -> sum_tot TA TB (Some (inr y)).
+
+Fixpoint Ttotal (σ : typ) : Teval σ -> SProp :=
+match σ return Teval σ -> SProp with
+| Tflat _ => flat_tot
+| Tarr σ τ => fun f => forall x : Teval σ, Ttotal σ x -> Ttotal τ (f x)
+| Ttop => fun _ => True
+| Tprd σ τ => fun p => and (Ttotal σ (fst p)) (Ttotal τ (snd p))
+| Tsum σ τ => sum_tot (Ttotal σ) (Ttotal τ)
+end.
+
+Definition Tnat := Tflat nat.
+
+Lemma total_flat_sup_intro : forall A D (d : directed (@flat_rel A) D),
+  exist A (fun x => D (Some x)) ->
+  Ttotal (Tflat A) (dcpo_sup (Flat A) D d).
+Proof.
+intros * [x Hx]; cbn.
+unfold flat_sup; destruct classical as [[x' [Hx']]|Hx'].
++ constructor.
++ elim Hx'; repeat econstructor; eauto.
+Qed.
+
+Lemma total_flat_FixT_intro : forall (σ : typ) (A : Type)
+  (f : (Teval σ → Flat A) → (Teval σ → Flat A)) (x : Teval σ),
+  (exist nat (fun n => Nat.iter n f (dcpo_bot _) x = None -> False)) ->
+  Ttotal (Tflat A) (FixT f x).
+Proof.
+intros * [n Hn]; cbn.
+unfold flat_sup; destruct classical as [[]|Hk].
++ constructor.
++ remember (Nat.iter n f (dcpo_bot _) x) as v; destruct v as [v|]; [|now elim Hn].
+  elim Hk; exists v; constructor.
+  exists (Nat.iter n f (dcpo_bot _)).
+  - symmetry; now apply unbox.
+  - clear; induction n; cbn; constructor; assumption.
+Qed.
+
+Program Definition is_strict {A} : Flat A → Flat unit :=
+  {| arr_fun := fun x => match x with None => None | Some _ => Some tt end |}.
 Next Obligation.
+intros A; unshelve econstructor.
++ intros x x' Hx; induction Hx; constructor.
++ intros D d Hd; cbn; unfold flat_sup.
+  destruct classical as [[x [Hx]]|Hx]; destruct classical as [[y [Hy]]|Hy]; cbn; try constructor.
+  - destruct Hy as [[] Hrw]; [|congruence].
+    rewrite Hrw; constructor.
+  - elim Hy; exists tt; constructor.
+    now exists (Some x).
+Qed.
+
+Lemma total_barrec : forall (Γ : dcpo) (σ : typ) (γ : Γ),
+  Ttotal (Tarr (Tarr (Tarr Tnat (Tsum σ (Tarr σ Tnat))) Tnat) (Tarr (Tarr Tnat (Tsum Ttop σ)) Tnat)) (@barrec Γ (Teval σ) γ).
+Proof.
+intros Γ σ γ φ φε α αε; cbn in φ, α.
+unfold barrec.
+assert (Hφ : continuous_alt φ).
+{ apply continuous_alt_equiv, φ. }
+specialize (Hφ is_strict).
+destruct Hφ as [Hφm Hφs].
+unfold Lam at 1; cbn [arr_fun].
+unfold Fix at 1; cbn [arr_fun].
+refine (total_flat_FixT_intro (Tarr Tnat (Tsum Ttop σ)) _ _ _ _).
+match goal with |- context [Nat.iter _ (arr_fun _ _ ?f)] => set (Φ := f) end.
+(* unfold Lam at 1; cbn [arr_fun]. *)
+(* match goal with |- context [Nat.iter _ ?f] => set (Φ := f) end. *)
+apply absurdum; intros H.
+assert (HΦ : forall n : nat, Nat.iter n Φ (dcpo_bot _) α = None).
+{ intros n; match goal with |- ?P = None => remember P as p end.
+  destruct p as [p|]; [|trivial].
+  elim H; exists n; intros Hn.
+  enough (Some p = None) by congruence.
+  rewrite <- Hn, Heqp; reflexivity. }
+clear H.
+(* pose (D (f : ℕ → Sum (Teval σ) (Teval σ → ℕ)) := _). *)
+
+
+(* unfold App at 2; cbn [arr_fun]. *)
+(*
+cbn [Lam App Sum_rec arr_fun].
+cbn [Comp Fst Snd arr_fun fst snd].
+cbn [Inl Snd arr_fun snd fst].
+cbn [Inr Snd arr_fun snd fst].
+cbn [Lam App Sum_rec arr_fun].
+cbn [Comp Fst Snd arr_fun fst snd].
+
+
+apply absurdum; intros H.
+unfold Lam at 1 in H; cbn [arr_fun] in H.
+cbn [Lam App arr_fun] in H.
+let t := match type of H with context [Lam (App ?f _)] => f end in set (X := t) in *.
+
+cbn in X.
+change (Comp Fst (Comp Fst Snd)) in H.
+
+unfold Lam at 1 in H; cbn [arr_fun] in H.
 *)
+Abort.
